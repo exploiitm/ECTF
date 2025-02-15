@@ -18,7 +18,9 @@ All decoder code is inside 'decoder' folder
 │   ├── lib
 │   │   ├── board
 │   │   └── max78000fthr_hal
-│   └── Makefile
+│   |── Makefile
+|   |── tools
+|   |   └── remote.py
 ```
 
 ## Build
@@ -38,8 +40,4 @@ For dependencies
 
 `python -m pip install pyserial`
 
-```
-└── tools
-    └── remote.py
-```
 
