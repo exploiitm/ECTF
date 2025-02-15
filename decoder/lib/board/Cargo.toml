@@ -1,0 +1,11 @@
+[package]
+name = "board"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+max7800x-hal = {path = "../max78000fthr_hal"}
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+embedded-io = "0.6.1"
+heapless = "0.8.0"
+hashbrown = { version = "0.15.2", default-features = false }

@@ -1,0 +1,32 @@
+[package]
+name = "max7800x-hal"
+version = "0.5.1"
+authors = ["SIGPwny <hello@sigpwny.com>", "Minh Duong <hello@whitehoodhacker.net>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "A Hardware Abstraction Layer for the MAX7800X microcontroller family"
+repository = "https://github.com/sigpwny/max7800x-hal"
+readme = "README.md"
+keywords = ["max78000", "embedded-hal", "arm", "cortex-m"]
+categories = ["embedded", "hardware-support", "no-std", "no-std::no-alloc"]
+
+[package.metadata.docs.rs]
+targets = ["thumbv7em-none-eabi", "thumbv7em-none-eabihf"]
+
+[dependencies]
+cortex-m = "0.7.7"
+cortex-m-rt = "0.7.3"
+embedded-hal = "1.0.0"
+embedded-hal-nb = "1.0.0"
+embedded-io = "0.6.1"
+max78000-pac = "0.3.0"
+paste = "1.0.15"
+rand = { version = "0.8.5", default-features = false, optional = true }
+rand_core = { version = "0.6.4", default-features = false, optional = true }
+
+[features]
+default = ["rand", "rt"]
+# Enabling this adds the `.flashprog` section header to critical flash programming functions for custom linkage
+flashprog-linkage = []
+rand = ["dep:rand", "dep:rand_core"]
+rt = ["max78000-pac/critical-section", "max78000-pac/rt"]
