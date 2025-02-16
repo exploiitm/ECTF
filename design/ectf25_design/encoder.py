@@ -1,5 +1,6 @@
 import json
 import struct
+import os
 import argparse
 from typing import Annotated
 
@@ -80,15 +81,19 @@ class Encoder:
         # Generate a timestamp-specific key using hierarchical derivation
         timestamp_key = derive_key(master_key, timestamp)
 
+        # Generate a unique IV
+        iv = os.urandom(16)
+
         # Encrypt the frame using AES-ECB with the derived key
-        cipher = AES.new(timestamp_key, AES.MODE_ECB)
+        cipher = AES.new(timestamp_key, AES.MODE_CBC, iv=iv)
         encrypted_frame = cipher.encrypt(pad_to_64_bytes(frame))        
 
         # Construct packet header
         packet_header = (
             timestamp.to_bytes(8, 'big') +  # 64-bit timestamp
             channel.to_bytes(4, 'big') +    # 32-bit channel ID
-            len(frame).to_bytes(1, 'big')   # 8-bit frame length
+            len(frame).to_bytes(1, 'big') + # 8-bit frame length
+            iv                              # 16-bytes initialisation vector
         )
         packet_unsigned = packet_header + encrypted_frame
 
