@@ -1,0 +1,10 @@
+[package]
+name = "verify_hmac"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+heapless = { version = "0.8.0", default-features = false }
+hmac = { version = "0.12.1", default-features = false }
+sha3 = { version = "0.10.8", default-features = false }
+parse_packet = { path = "../parse_packet" }
