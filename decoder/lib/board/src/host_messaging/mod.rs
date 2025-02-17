@@ -1,4 +1,5 @@
 const MAGIC: u8 = b'%';
+const FRAME_PACKET_SIZE: u8 = 125;
 const ACK_PACKET: [u8; 4]  = [b'%', b'A', 0x00, 0x00];
 const DEBUG_HEADER: [u8; 2] = [b'%', b'G']; 
 extern crate alloc;
@@ -112,25 +113,8 @@ pub fn write_decoded_packet(board: &mut Board, data: &[u8]) {
     }
 }
 
-// pub fn decode(board: &mut Board, header: Header) {
-//     board.console.write_bytes(&ACK_PACKET);
-//     let length = header.length;
-//     let num_packets: u16 = length / 256;
-
-//     for _ in 0..num_packets {
-//         let packet = read_packet(board, 256);
-//         board.console.write_bytes(&ACK_PACKET);
-//         //TODO :: DO WHAT YOU WILL WITH THESE PACKETS
-//     }
-//     if length % 256 != 0 {
-//         let packet = read_packet(board, length % 256);
-//         board.console.write_bytes(&ACK_PACKET);
-//         //TODO :: DO WHAT YOU WILL DO WITH THESE PACKETS
-//     }
-//     //TODO call write_decoded_packet after decoding the packets.
-// }
 #[inline(always)]
-fn _send_debug_message(board: &mut Board, message: &str) {
+fn send_debug_message(board: &mut Board, message: &str) {
     let length = message.len() as u16;
     let header = Header {
         opcode: Opcode::Debug,
@@ -155,6 +139,19 @@ fn _read_packet(board: &mut Board, length: u16) -> Vec<u8> {
     return data;
 }
 
+pub fn read_frame_packet(board: &mut Board, header: Header) -> vec::Vec<u8>{
+    if header.length != 125{
+        panic!();
+    }
+    board.console.write_bytes(&ACK_PACKET);
+    let mut data = vec![0u8; 125];
+    for i in 0..125 {
+        let byte = board.console.read_byte();
+        data[i] = byte;
+    }
+    board.console.write_bytes(&ACK_PACKET);
+    data    
+}
 pub fn subscription_update(board: &mut Board, header: Header) -> vec::Vec<u8> {
     board.console.write_bytes(&ACK_PACKET);
     let length = header.length;
@@ -181,48 +178,13 @@ pub fn subscription_update(board: &mut Board, header: Header) -> vec::Vec<u8> {
     } 
     board.console.write_bytes(&ACK_PACKET);
 
-    _send_debug_message(board, format!("Read all packets").as_str());
+    send_debug_message(board, format!("Read all packets").as_str());
 
     let message = format!("first few bytes of subscripion data: {}", &sub_data[40]);
-    _send_debug_message(board, message.as_str());
+    send_debug_message(board, message.as_str());
 
     sub_data
 }
-
-// pub fn subscription_update(board: &mut Board, header: Header) -> Subscription {
-//     board.console.write_bytes(&ACK_PACKET);
-
-//     let length = header.length;
-//     let mut sub_data = vec![0; length as usize];
-
-//     board.console.write_bytes(&DEBUG_HEADER);
-//     let message = b"Reading Subscription Data";
-//     let length_bytes = (message.len() as u16).to_le_bytes();
-//     board.console.write_bytes(&length_bytes);
-//     board.console.write_bytes(message);
-
-//     let num_packets: usize = (length / 256) as usize;
-
-//     board.console.write_bytes(&DEBUG_HEADER);
-//     let message = format!("Number of packets: {}", num_packets);
-//     let length_bytes = (message.len() as u16).to_le_bytes();
-//     board.console.write_bytes(&length_bytes);
-//     board.console.write_bytes(message.as_bytes());
-
-//     for i in 0..num_packets {
-//         let packet = read_packet(board, 256);
-//         board.console.write_bytes(&ACK_PACKET);
-//         sub_data[i * 256..(i + 1) * 256].copy_from_slice(&packet);
-//     }
-
-//     if length % 256 != 0 {
-//         let packet = read_packet(board, length % 256);
-//         sub_data[num_packets * 256..].copy_from_slice(&packet);
-//         board.console.write_bytes(&ACK_PACKET);
-//     }
-
-//     parse_subscriptions(&sub_data)
-// }
 
 pub fn parse_subscriptions(_packed_sub: &[u8]) -> Subscription {
     //TODO:: parse all the packets
