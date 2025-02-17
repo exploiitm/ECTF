@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 aes = { version = "0.8.4", default-features = false }
-cbc = { version = "0.1.2", default-features = false }
+cbc = { version = "0.1.2", default-features = false, features = ["block-padding", "alloc"] }
 cipher = { version = "0.4.4", default-features = false }
