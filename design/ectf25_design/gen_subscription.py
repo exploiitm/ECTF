@@ -1,4 +1,5 @@
 from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import pad
 from collections import deque
 import struct
@@ -7,9 +8,13 @@ from dataclasses import dataclass
 import json
 import secrets
 import hashlib
+import argparse
+from loguru import logger
+from pathlib import Path
 
 Bytes64 = Annotated[bytes, 64]
 
+Bytes32 = Annotated[bytes, 32]
 
 @dataclass(init=True, repr=True)
 class Cover:
@@ -17,10 +22,11 @@ class Cover:
     leaves: List[[int, Bytes64]]
 
 
-def enc(input: Bytes64, key: Bytes64) -> Bytes64:
-    cipher = AES.new(key, AES.MODE_ECB)
-    encrypted = cipher.encrypt(input)
-    return bytes(a ^ b for a, b in zip(encrypted, input))
+def enc(input: Bytes64, key: Bytes64) -> Bytes32:
+    hasher = hashlib.sha3_256()
+    hasher.update(input)
+    hasher.update(key)
+    return hasher.digest()
 
 
 def enc_right(input: Bytes64) -> Bytes64:
@@ -107,12 +113,12 @@ def gen_subscription(
     secrets: bytes, device_id: int, start: int, end: int, channel: int
 ) -> bytes:
     global_secrets = json.loads(secrets.decode("utf-8"))
-    if str(channel) not in global_secrets:
+    if ("K"+str(channel)) not in global_secrets:
         raise ValueError(
             "Invalid channel: No secret key found for the given channel")
 
     # Retrieve the master secret for the given channel
-    Ks = bytes.fromhex(global_secrets[str(channel)])
+    Ks = bytes.fromhex(global_secrets["K"+str(channel)])
 
     # Derive K10 = H(Ks || decoder-id)
     K10 = hashlib.sha256(Ks + str(device_id).encode()).digest()
@@ -160,44 +166,79 @@ def gen_subscription(
     subscription_data = device_id_bytes + \
         channel_bytes + start_bytes + end_bytes + key_data
 
+    length = len(subscription_data)
+    length_bytes = struct.pack("<Q", length)
+    subscription_data = length_bytes + subscription_data
+
     # Encode subscription data
-    print(subscription_data)
-    cipher = AES.new(K10, AES.MODE_ECB)
+    iv = get_random_bytes(16)
+    cipher = AES.new(K10, AES.MODE_CBC, iv)
     padded_data = pad(subscription_data, AES.block_size)
     subscription_data_encrypted = cipher.encrypt(padded_data)
+    print(subscription_data, len(subscription_data), " ", len(subscription_data_encrypted))
+    # # we write to sub.bin
+    # with open("sub.bin", "wb") as f:
+    #     f.write(subscription_data_encrypted)  # Append the subscription data
+    return subscription_data_encrypted  # Returning for verification if needed
 
-    # we write to sub.bin
-    with open("sub.bin", "wb") as f:
-        f.write(subscription_data_encrypted)  # Append the subscription data
-    return subscription_data  # Returning for verification if needed
 
 
-def gen_secrets(channels: list[int]) -> bytes:
-    global_secrets = {}
-    for chan_id in channels:
-        global_secrets[chan_id] = secrets.token_bytes(
-            64).hex()  # Convert bytes to hex
 
-    global_secrets[-1] = secrets.token_bytes(64).hex()  # Convert bytes to hex
+def parse_args():
+    """Define and parse the command line arguments
 
-    return json.dumps(global_secrets).encode('utf-8')  # JSON serializable
+    NOTE: Your design must not change this function
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Force creation of subscription file, overwriting existing file",
+    )
+    parser.add_argument(
+        "secrets_file",
+        type=argparse.FileType("rb"),
+        help="Path to the secrets file created by ectf25_design.gen_secrets",
+    )
+    parser.add_argument("subscription_file", type=Path, help="Subscription output")
+    parser.add_argument(
+        "device_id", type=lambda x: int(x, 0), help="Device ID of the update recipient."
+    )
+    parser.add_argument(
+        "start", type=lambda x: int(x, 0), help="Subscription start timestamp"
+    )
+    parser.add_argument("end", type=int, help="Subscription end timestamp")
+    parser.add_argument("channel", type=int, help="Channel to subscribe to")
+    return parser.parse_args()
 
-    # subscription_json = json.dumps(subscription_data).encode("utf-8")
+
+def main():
+    """Main function of gen_subscription
+
+    You will likely not have to change this function
+    """
+    # Parse the command line arguments
+    args = parse_args()
+
+    subscription = gen_subscription(
+        args.secrets_file.read(), args.device_id, args.start, args.end, args.channel
+    )
+
+    # Print the generated subscription for your own debugging
+    # Attackers will NOT have access to the output of this (although they may have
+    # subscriptions in certain scenarios), but feel free to remove
+    #
+    # NOTE: Printing sensitive data is generally not good security practice
+    logger.debug(f"Generated subscription: {subscription}")
+
+    # Open the file, erroring if the file exists unless the --force arg is provided
+    with open(args.subscription_file, "wb" if args.force else "xb") as f:
+        f.write(subscription)
+
+    # For your own debugging. Feel free to remove
+    logger.success(f"Wrote subscription to {str(args.subscription_file.absolute())}")
 
 
 if __name__ == "__main__":
-    test_cover()
-    # Generate secrets for channels 1, 2, and 3 (modify as needed)
-    channels = [1, 2, 3]
-    secrets_data = gen_secrets(channels)
-
-    # Define device ID and time range
-    device_id = 1234
-    start_time = 0
-    end_time = 15
-    channel = 1  # Use a valid channel
-
-    # Generate subscription and write to sub.bin
-    gen_subscription(secrets_data, device_id, start_time, end_time, channel)
-
-    print("sub.bin has been successfully created!")
+    main()

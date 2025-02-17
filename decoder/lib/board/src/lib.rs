@@ -154,9 +154,16 @@ fn panic_handler(_info: &PanicInfo) -> ! {
                 .parity(hal::uart::ParityBit::None)
                 .build();
 
-        console.write_bytes(b"\r\n");
-        console.write_bytes(b"PANIC PANIC\r\n");
-        console.write_bytes(b"Going to reset bit :)\r\n");
+        let DEBUG_HEADER: [u8; 2] = [b'%', b'G']; 
+        console.write_bytes(&DEBUG_HEADER);
+        let message = b"board panicked";
+        let message_len = message.len() as u16;
+        let message_len_bytes = message_len.to_le_bytes();
+        console.write_bytes(&message_len_bytes);
+        console.write_bytes(message);
+        console.flush_tx();
+
+
 
         let addr = 0x10045ff8;
         let new_value = 0; // Only extracting last 6 bits
