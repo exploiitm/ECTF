@@ -15,6 +15,7 @@ use std::env;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
+use hex;
 
 fn main() {
     // Put `memory.x` in our output directory and ensure it's
@@ -54,34 +55,32 @@ fn main() {
     rust_code.push_str("// Auto-generated file, do not edit manually!\n");
 
     if let serde_json::Value::Object(map) = json {
+        rust_code.push_str(
+        "fn get_key(key: &str) -> Option<&'static [u8]> {
+            match key { \n");
         for (key, value) in map {
             if let Some(val) = value.as_str() {
+                let hex_val = hex::decode(val);
+                let bytes = hex_val.unwrap();
+                let array = format!("{:?}", bytes);
+
+
                 rust_code.push_str(&format!(
-                    "pub const {}: &str = {:?};\n",
-                    key.to_uppercase(),
-                    val
-                ));
-            } else if let Some(val) = value.as_i64() {
-                rust_code.push_str(&format!(
-                    "pub const {}: i64 = {};\n",
-                    key.to_uppercase(),
-                    val
-                ));
-            } else if let Some(val) = value.as_f64() {
-                rust_code.push_str(&format!(
-                    "pub const {}: f64 = {:.6};\n",
-                    key.to_uppercase(),
-                    val
-                ));
-            } else if let Some(val) = value.as_bool() {
-                rust_code.push_str(&format!(
-                    "pub const {}: bool = {};\n",
-                    key.to_uppercase(),
-                    val
+                    "\"{}\" => Some(&{}),\n",
+                    key,
+                    array
                 ));
             }
         }
+
+
+        println!("{}", rust_code); 
     }
+    rust_code.push_str(
+        "_ => None,
+            }
+        }"
+    );
 
     let out_dir = env::var("OUT_DIR").unwrap();
     fs::write(format!("{}/secrets.rs", out_dir), rust_code).expect("Failed to write secrets.rs");

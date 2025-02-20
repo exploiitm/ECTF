@@ -5,6 +5,9 @@ use alloc::vec;
 use embedded_io::Write;
 pub use hal::entry;
 pub use hal::pac;
+
+
+include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
 // this comment is useless, added by nithin.
 
 // use core::cell::RefCell;
@@ -12,6 +15,8 @@ pub use hal::pac;
 // use cortex_m::interrupt::{self, Mutex};
 
 use board::Board;
+
+
 
 extern crate alloc;
 use alloc::format;
@@ -54,7 +59,9 @@ fn main() -> ! {
     // panic!();
    
 
-
+    if let Some(val) = get_key("K1"){
+        write!(board.console, "Key K1: {:?}\r\n", val).unwrap();
+    }
     loop {
         let header: board::host_messaging::Header = board::host_messaging::read_header(&mut board);
         match header.opcode {
