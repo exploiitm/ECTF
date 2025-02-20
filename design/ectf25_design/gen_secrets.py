@@ -21,9 +21,9 @@ def gen_secrets(channels: list[int]) -> bytes:
    
     global_secrets = {}
     for chan_id in channels:
-        global_secrets[chan_id] = secrets.token_bytes(64).hex()
+        global_secrets["K"+str(chan_id)] = secrets.token_bytes(64).hex()
         
-    global_secrets[-1] = secrets.token_bytes(64).hex()
+    global_secrets["Ks"] = secrets.token_bytes(64).hex()
 
     return json.dumps(global_secrets).encode('utf-8')
 

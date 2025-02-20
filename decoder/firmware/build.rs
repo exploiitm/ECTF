@@ -16,6 +16,21 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 
+const SECRET_FILE: &str = "../../secrets/secrets.json";
+const SECRETS_HEADER: &str = r#"
+// use hashbrown::HashMap;
+// use alloc::string::String;
+use crate::alloc::string::ToString;
+
+fn get_secrets() -> HashMap<String, [u8; 64]> {
+    let mut secrets = HashMap::new();
+"#;
+const SECRETS_FOOTER: &str = r#"
+
+    secrets
+}
+"#;
+
 fn main() {
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
@@ -42,7 +57,6 @@ fn main() {
     // Set the linker script to the one provided by cortex-m-rt.
     println!("cargo:rustc-link-arg=-Tlink.x");
 
-    let SECRET_FILE = "../../secrets/secrets.json";
     println!("cargo:rerun-if-changed={}", SECRET_FILE);
     // Loading in secrets.json
     let secrets = fs::read_to_string(SECRET_FILE).expect("Failed to read secrets.json");
@@ -51,37 +65,20 @@ fn main() {
 
     // Generate Rust code with constants
     let mut rust_code = String::new();
-    rust_code.push_str("// Auto-generated file, do not edit manually!\n");
-
+    rust_code.push_str(&SECRETS_HEADER);
     if let serde_json::Value::Object(map) = json {
         for (key, value) in map {
-            if let Some(val) = value.as_str() {
-                rust_code.push_str(&format!(
-                    "pub const {}: &str = {:?};\n",
-                    key.to_uppercase(),
-                    val
-                ));
-            } else if let Some(val) = value.as_i64() {
-                rust_code.push_str(&format!(
-                    "pub const {}: i64 = {};\n",
-                    key.to_uppercase(),
-                    val
-                ));
-            } else if let Some(val) = value.as_f64() {
-                rust_code.push_str(&format!(
-                    "pub const {}: f64 = {:.6};\n",
-                    key.to_uppercase(),
-                    val
-                ));
-            } else if let Some(val) = value.as_bool() {
-                rust_code.push_str(&format!(
-                    "pub const {}: bool = {};\n",
-                    key.to_uppercase(),
-                    val
-                ));
+            if let Some(val) = value.as_str(){
+                rust_code.push_str(&format!("    secrets.insert(\"{}\".to_string(), [", key));
+                for i in (0..val.len()).step_by(2) {
+                    let byte = u8::from_str_radix(&val[i..i + 2], 16).unwrap();
+                    rust_code.push_str(&format!("{},", byte));
+                }
+                rust_code.push_str("]);");
             }
         }
     }
+    rust_code.push_str(&SECRETS_FOOTER);
 
     let out_dir = env::var("OUT_DIR").unwrap();
     fs::write(format!("{}/secrets.rs", out_dir), rust_code).expect("Failed to write secrets.rs");
