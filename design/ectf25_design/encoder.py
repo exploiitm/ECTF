@@ -10,6 +10,8 @@ Bytes64 = Annotated[bytes, 64]
 Bytes32 = Annotated[bytes, 32]
 Bytes4 = Annotated[bytes, 4]
 
+
+
 def aeshash(input: Bytes32, key: Bytes32) -> Bytes32:
     cipher = AES.new(key, AES.MODE_ECB)
     encrypted = cipher.encrypt(input)

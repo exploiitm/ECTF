@@ -10,9 +10,11 @@ pub use hal::pac;
 include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
 // this comment is useless, added by nithin.
 
-// use core::cell::RefCell;
+// lib imports
+pub extern crate parse_packet as parser;
 
-// use cortex_m::interrupt::{self, Mutex};
+//print function:
+//board.console.write_bytes(b"Hello world\r\n")
 
 use board::Board;
 

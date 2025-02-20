@@ -179,7 +179,7 @@ def gen_subscription(
     # # we write to sub.bin
     # with open("sub.bin", "wb") as f:
     #     f.write(subscription_data_encrypted)  # Append the subscription data
-    return subscription_data_encrypted  # Returning for verification if needed
+    return iv+subscription_data_encrypted  # Returning for verification if needed
 
 
 
