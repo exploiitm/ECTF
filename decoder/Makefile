@@ -20,14 +20,13 @@ release: clean
 # Check which devices are in use and lock them
 check_locks:
 	@for d in $(DEVICES); do \
+		LOCK_FILE="$(LOCK_DIR)/lock-$$(basename $$d)"; \
 		if lsof $$d > /dev/null 2>&1; then \
-			LOCK_FILE="$(LOCK_DIR)/lock-$$(basename $$d)"; \
 			if [ ! -e $$LOCK_FILE ]; then \
 				touch $$LOCK_FILE; \
 				echo "Locking $$d (in use)"; \
 			fi; \
 		else \
-			LOCK_FILE="$(LOCK_DIR)/lock-$$(basename $$d)"; \
 			if [ -e $$LOCK_FILE ]; then \
 				rm -f $$LOCK_FILE; \
 				echo "Unlocking $$d (no longer in use)"; \
