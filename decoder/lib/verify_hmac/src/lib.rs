@@ -5,12 +5,14 @@ use sha3::Sha3_256;
 
 pub use parse_packet::Packet;
 
+/*
 fn verify_hmac_better(packet: &Packet, key: &[u8]) -> bool {
     type HMAC = Hmac<Sha256>;
     let mut mac = HMAC::new_from_slice(key);
     let mut hashee = heapless::Vec::<u8, 128>::new();
     hashee.extend_from_slice(&packet.timestamp.to_le_bytes());
 }
+*/
 
 fn verify_hmac(packet: &Packet, key: &[u8]) -> bool {
     let mut to_hash = heapless::Vec::<u8, 128>::new();

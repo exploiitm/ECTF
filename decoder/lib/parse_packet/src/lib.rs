@@ -2,12 +2,12 @@
 
 #[derive(Debug, Clone)]
 pub struct Packet {
-    magic: [u8; 8],
-    timestamp: u64,
-    channel_id: u32,
-    data_enc: [u8; 64],
-    hmac: [u8; 32],
-    end_magic: [u8; 8],
+    pub magic: [u8; 8],
+    pub timestamp: u64,
+    pub channel_id: u32,
+    pub data_enc: [u8; 64],
+    pub hmac: [u8; 32],
+    pub end_magic: [u8; 8],
 }
 
 fn parse_packet(input: &[u8]) -> Option<Packet> {

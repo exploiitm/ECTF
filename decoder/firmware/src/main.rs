@@ -5,11 +5,12 @@ use alloc::vec;
 use embedded_io::Write;
 pub use hal::entry;
 pub use hal::pac;
-// this comment is useless, added by nithin.
 
-// use core::cell::RefCell;
+// lib imports
+pub extern crate parse_packet as parser;
 
-// use cortex_m::interrupt::{self, Mutex};
+//print function:
+//board.console.write_bytes(b"Hello world\r\n")
 
 use board::Board;
 

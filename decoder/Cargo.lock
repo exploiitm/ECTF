@@ -209,6 +209,7 @@ dependencies = [
  "max7800x-hal",
  "once_cell",
  "panic-halt",
+ "parse_packet",
  "rand",
  "serde_json",
  "sha3",
