@@ -43,7 +43,7 @@ fn main() {
     // Set the linker script to the one provided by cortex-m-rt.
     println!("cargo:rustc-link-arg=-Tlink.x");
 
-    let SECRET_FILE = "../../secrets/secrets.json";
+    let SECRET_FILE = "../../secrets.json";
     println!("cargo:rerun-if-changed={}", SECRET_FILE);
     // Loading in secrets.json
     let secrets = fs::read_to_string(SECRET_FILE).expect("Failed to read secrets.json");
@@ -56,7 +56,7 @@ fn main() {
 
     if let serde_json::Value::Object(map) = json {
         rust_code.push_str(
-        "fn get_key(key: &str) -> Option<&'static [u8]> {
+        "fn get_key(key: &str) -> Option<&'static [u8; 64]> {
             match key { \n");
         for (key, value) in map {
             if let Some(val) = value.as_str() {
@@ -83,5 +83,7 @@ fn main() {
     );
 
     let out_dir = env::var("OUT_DIR").unwrap();
+    let rust_code_2 = rust_code.clone();
+
     fs::write(format!("{}/secrets.rs", out_dir), rust_code).expect("Failed to write secrets.rs");
 }
