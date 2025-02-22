@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 pub extern crate max7800x_hal as hal;
-use alloc::vec;
+use alloc::string::String;
 use embedded_io::Write;
 pub use hal::entry;
 pub use hal::pac;
@@ -22,6 +22,9 @@ use alloc::format;
 use embedded_alloc::LlffHeap as Heap;
 use hashbrown::HashMap;
 use sha3::{Digest, Sha3_256};
+
+include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
+
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
 
@@ -43,6 +46,13 @@ fn main() -> ! {
     let mut board = Board::new();
     board.delay.delay_ms(500);
     board.console.write_bytes(b"Board Initialized\r\n");
+
+    let secrets: HashMap<String, [u8; 64]> = get_secrets();
+    if let Some(val) = secrets.get("testvar"){
+        board.console.write_bytes(b"TestVar: ");
+        board.console.write_bytes(&val[0..2]);
+        board.console.write_bytes(b"\r\n");
+    }
 
     // panic!();
     let is_bit_set = board.is_safety_bit_set();
