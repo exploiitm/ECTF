@@ -24,7 +24,7 @@ fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16]) -> vec::Vec<
     Aes128CbcDec::new(GenericArray::from_slice(key), GenericArray::from_slice(iv)).decrypt_padded_vec_mut::<NoPadding>(data_enc).unwrap()
 }
 
-fn decrypt_sub(encrypted_sub: vec::Vec<u8>, key: [u8; 32]) -> Option<Subscription> {
+pub fn decrypt_sub(encrypted_sub: vec::Vec<u8>, key: [u8; 32]) -> Option<Subscription> {
     let iv = GenericArray::from_slice(&encrypted_sub[0..16]);
     let ciphertext = &encrypted_sub[16..];
     let key = GenericArray::from_slice(&key);

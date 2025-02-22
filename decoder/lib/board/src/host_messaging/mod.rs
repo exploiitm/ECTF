@@ -5,6 +5,9 @@ const DEBUG_HEADER: [u8; 2] = [b'%', b'G'];
 extern crate alloc;
 use alloc::{fmt::format, format};
 use embedded_io::Write;
+
+
+
 pub enum Opcode {
     Decode,
     Subscribe,
@@ -113,8 +116,7 @@ pub fn write_decoded_packet(board: &mut Board, data: &[u8]) {
     }
 }
 
-#[inline(always)]
-fn send_debug_message(board: &mut Board, message: &str) {
+pub fn send_debug_message(board: &mut Board, message: &str) {
     let length = message.len() as u16;
     let header = Header {
         opcode: Opcode::Debug,
@@ -131,7 +133,7 @@ fn _read_packet(board: &mut Board, length: u16) -> Vec<u8> {
     }
 
     let mut data = vec![0; length as usize];
-    for i in 0..(length - 1) {
+    for i in 0..length{
         let byte = board.console.read_byte();
         data[i as usize] = byte;
     }
@@ -180,8 +182,6 @@ pub fn subscription_update(board: &mut Board, header: Header) -> vec::Vec<u8> {
 
     send_debug_message(board, format!("Read all packets").as_str());
 
-    let message = format!("first few bytes of subscripion data: {}", &sub_data[40]);
-    send_debug_message(board, message.as_str());
 
     sub_data
 }

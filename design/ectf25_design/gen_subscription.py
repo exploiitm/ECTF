@@ -16,6 +16,7 @@ Bytes64 = Annotated[bytes, 64]
 
 Bytes32 = Annotated[bytes, 32]
 
+
 @dataclass(init=True, repr=True)
 class Cover:
     nodes: List[[int, Bytes64]]
@@ -118,10 +119,14 @@ def gen_subscription(
             "Invalid channel: No secret key found for the given channel")
 
     # Retrieve the master secret for the given channel
-    Ks = bytes.fromhex(global_secrets["K"+str(channel)])
+    Ks = bytes.fromhex(global_secrets["Ks"])
 
+    hasher = hashlib.sha3_256()
+    hasher.update(Ks)
+    hasher.update(str(device_id).encode())
     # Derive K10 = H(Ks || decoder-id)
-    K10 = hashlib.sha256(Ks + str(device_id).encode()).digest()
+    K10 = hasher.digest()
+    print("Final Key Looks Like this", K10.hex().encode())
 
     # Prepare subscription structure
     # subscription_data = {
@@ -169,19 +174,18 @@ def gen_subscription(
     length = len(subscription_data)
     length_bytes = struct.pack("<Q", length)
     subscription_data = length_bytes + subscription_data
+    print(subscription_data)
 
     # Encode subscription data
     iv = get_random_bytes(16)
     cipher = AES.new(K10, AES.MODE_CBC, iv)
     padded_data = pad(subscription_data, AES.block_size)
     subscription_data_encrypted = cipher.encrypt(padded_data)
-    print(subscription_data, len(subscription_data), " ", len(subscription_data_encrypted))
     # # we write to sub.bin
     # with open("sub.bin", "wb") as f:
     #     f.write(subscription_data_encrypted)  # Append the subscription data
+    print("This is the IV: ", iv.hex().encode())
     return iv+subscription_data_encrypted  # Returning for verification if needed
-
-
 
 
 def parse_args():
@@ -201,7 +205,8 @@ def parse_args():
         type=argparse.FileType("rb"),
         help="Path to the secrets file created by ectf25_design.gen_secrets",
     )
-    parser.add_argument("subscription_file", type=Path, help="Subscription output")
+    parser.add_argument("subscription_file", type=Path,
+                        help="Subscription output")
     parser.add_argument(
         "device_id", type=lambda x: int(x, 0), help="Device ID of the update recipient."
     )
@@ -237,7 +242,8 @@ def main():
         f.write(subscription)
 
     # For your own debugging. Feel free to remove
-    logger.success(f"Wrote subscription to {str(args.subscription_file.absolute())}")
+    logger.success(f"Wrote subscription to {
+                   str(args.subscription_file.absolute())}")
 
 
 if __name__ == "__main__":

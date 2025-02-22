@@ -6,7 +6,6 @@ use embedded_io::Write;
 pub use hal::entry;
 pub use hal::pac;
 
-
 include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
 // this comment is useless, added by nithin.
 
@@ -17,8 +16,6 @@ pub extern crate parse_packet as parser;
 //board.console.write_bytes(b"Hello world\r\n")
 
 use board::Board;
-
-
 
 extern crate alloc;
 use alloc::format;
@@ -32,7 +29,6 @@ static HEAP: Heap = Heap::empty();
 const HEAP_SIZE: usize = 1024 * 32;
 static mut HEAP_MEM: [core::mem::MaybeUninit<u8>; HEAP_SIZE] =
     [core::mem::MaybeUninit::uninit(); HEAP_SIZE];
-
 
 #[entry]
 fn main() -> ! {
@@ -59,9 +55,8 @@ fn main() -> ! {
     }
     board.delay.delay_ms(1000);
     // panic!();
-   
 
-    if let Some(val) = get_key("K1"){
+    if let Some(val) = get_key("K1") {
         write!(board.console, "Key K1: {:?}\r\n", val).unwrap();
     }
     loop {
@@ -71,8 +66,11 @@ fn main() -> ! {
                 board::host_messaging::list_subscriptions(&mut board);
             }
             board::host_messaging::Opcode::Subscribe => {
-
-                board::host_messaging::subscription_update(&mut board, header);
+                let data = board::host_messaging::subscription_update(&mut board, header);
+                board::host_messaging::send_debug_message(&mut board, "Came Back to Main");
+                let key = get_key("Ks").unwrap();
+                board::host_messaging::send_debug_message(&mut board, "I got the key Back to Main");
+                board::decrypt_data::decrypt_sub(&mut board, data, *key);
             }
             _ => {
                 panic!()
