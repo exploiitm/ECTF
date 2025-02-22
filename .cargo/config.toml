@@ -1,6 +1,9 @@
 [target.thumbv7em-none-eabihf]
 # probe-rs support is currently not working
 # runner = "probe-rs run --chip MAX78000 --chip-description-path probe-rs/max78000_family.yaml --connect-under-reset"
+# [target.thumbv7em-none-eabihf]
+# # Not used by the VS Code Debugger, only `cargo run`
+runner = "arm-none-eabi-gdb -q -x openocd.gdb"
 
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 # uncomment ONE of these three option to make `cargo run` start a GDB session
