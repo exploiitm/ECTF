@@ -1,15 +1,19 @@
 #![no_std]
 #![no_main]
 pub extern crate max7800x_hal as hal;
-use alloc::string::String;
+use alloc::vec;
 use embedded_io::Write;
 pub use hal::entry;
 pub use hal::pac;
+
+include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
 // this comment is useless, added by nithin.
 
-// use core::cell::RefCell;
+// lib imports
+pub extern crate parse_packet as parser;
 
-// use cortex_m::interrupt::{self, Mutex};
+//print function:
+//board.console.write_bytes(b"Hello world\r\n")
 
 use board::Board;
 
@@ -18,9 +22,6 @@ use alloc::format;
 use embedded_alloc::LlffHeap as Heap;
 use hashbrown::HashMap;
 use sha3::{Digest, Sha3_256};
-
-include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
-
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
 
@@ -28,7 +29,6 @@ static HEAP: Heap = Heap::empty();
 const HEAP_SIZE: usize = 1024 * 32;
 static mut HEAP_MEM: [core::mem::MaybeUninit<u8>; HEAP_SIZE] =
     [core::mem::MaybeUninit::uninit(); HEAP_SIZE];
-
 
 #[entry]
 fn main() -> ! {
@@ -44,13 +44,6 @@ fn main() -> ! {
     board.delay.delay_ms(500);
     board.console.write_bytes(b"Board Initialized\r\n");
 
-    let secrets: HashMap<String, [u8; 64]> = get_secrets();
-    if let Some(val) = secrets.get("testvar"){
-        board.console.write_bytes(b"TestVar: ");
-        board.console.write_bytes(&val[0..2]);
-        board.console.write_bytes(b"\r\n");
-    }
-
     // panic!();
     let is_bit_set = board.is_safety_bit_set();
     board.delay.delay_ms(500);
@@ -62,9 +55,10 @@ fn main() -> ! {
     }
     board.delay.delay_ms(1000);
     // panic!();
-   
 
-
+    if let Some(val) = get_key("K1") {
+        write!(board.console, "Key K1: {:?}\r\n", val).unwrap();
+    }
     loop {
         let header: board::host_messaging::Header = board::host_messaging::read_header(&mut board);
         match header.opcode {
@@ -72,8 +66,11 @@ fn main() -> ! {
                 board::host_messaging::list_subscriptions(&mut board);
             }
             board::host_messaging::Opcode::Subscribe => {
-
-                board::host_messaging::subscription_update(&mut board, header);
+                let data = board::host_messaging::subscription_update(&mut board, header);
+                board::host_messaging::send_debug_message(&mut board, "Came Back to Main");
+                let key = get_key("Ks").unwrap();
+                board::host_messaging::send_debug_message(&mut board, "I got the key Back to Main");
+                board::decrypt_data::decrypt_sub(&mut board, data, *key);
             }
             _ => {
                 panic!()

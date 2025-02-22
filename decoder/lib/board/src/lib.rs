@@ -37,8 +37,8 @@ pub struct Subscription {
 
 use core::panic::PanicInfo;
 
+pub mod decrypt_data;
 pub mod host_messaging;
-
 unsafe impl Sync for Board {}
 
 impl Board {
@@ -154,7 +154,7 @@ fn panic_handler(_info: &PanicInfo) -> ! {
                 .parity(hal::uart::ParityBit::None)
                 .build();
 
-        let DEBUG_HEADER: [u8; 2] = [b'%', b'G']; 
+        let DEBUG_HEADER: [u8; 2] = [b'%', b'G'];
         console.write_bytes(&DEBUG_HEADER);
         let message = b"board panicked";
         let message_len = message.len() as u16;
@@ -162,8 +162,6 @@ fn panic_handler(_info: &PanicInfo) -> ! {
         console.write_bytes(&message_len_bytes);
         console.write_bytes(message);
         console.flush_tx();
-
-
 
         let addr = 0x10045ff8;
         let new_value = 0; // Only extracting last 6 bits

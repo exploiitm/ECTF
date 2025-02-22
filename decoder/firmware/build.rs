@@ -15,21 +15,7 @@ use std::env;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
-
-const SECRET_FILE: &str = "../../secrets/secrets.json";
-const SECRETS_HEADER: &str = r#"
-// use hashbrown::HashMap;
-// use alloc::string::String;
-use crate::alloc::string::ToString;
-
-fn get_secrets() -> HashMap<String, [u8; 64]> {
-    let mut secrets = HashMap::new();
-"#;
-const SECRETS_FOOTER: &str = r#"
-
-    secrets
-}
-"#;
+use hex;
 
 fn main() {
     // Put `memory.x` in our output directory and ensure it's
@@ -57,6 +43,7 @@ fn main() {
     // Set the linker script to the one provided by cortex-m-rt.
     println!("cargo:rustc-link-arg=-Tlink.x");
 
+    let SECRET_FILE = "../../secrets.json";
     println!("cargo:rerun-if-changed={}", SECRET_FILE);
     // Loading in secrets.json
     let secrets = fs::read_to_string(SECRET_FILE).expect("Failed to read secrets.json");
@@ -65,21 +52,38 @@ fn main() {
 
     // Generate Rust code with constants
     let mut rust_code = String::new();
-    rust_code.push_str(&SECRETS_HEADER);
+    rust_code.push_str("// Auto-generated file, do not edit manually!\n");
+
     if let serde_json::Value::Object(map) = json {
+        rust_code.push_str(
+        "fn get_key(key: &str) -> Option<&'static [u8; 64]> {
+            match key { \n");
         for (key, value) in map {
-            if let Some(val) = value.as_str(){
-                rust_code.push_str(&format!("    secrets.insert(\"{}\".to_string(), [", key));
-                for i in (0..val.len()).step_by(2) {
-                    let byte = u8::from_str_radix(&val[i..i + 2], 16).unwrap();
-                    rust_code.push_str(&format!("{},", byte));
-                }
-                rust_code.push_str("]);");
+            if let Some(val) = value.as_str() {
+                let hex_val = hex::decode(val);
+                let bytes = hex_val.unwrap();
+                let array = format!("{:?}", bytes);
+
+
+                rust_code.push_str(&format!(
+                    "\"{}\" => Some(&{}),\n",
+                    key,
+                    array
+                ));
             }
         }
+
+
+        println!("{}", rust_code); 
     }
-    rust_code.push_str(&SECRETS_FOOTER);
+    rust_code.push_str(
+        "_ => None,
+            }
+        }"
+    );
 
     let out_dir = env::var("OUT_DIR").unwrap();
+    let rust_code_2 = rust_code.clone();
+
     fs::write(format!("{}/secrets.rs", out_dir), rust_code).expect("Failed to write secrets.rs");
 }

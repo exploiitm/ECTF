@@ -21,9 +21,10 @@ linked_list_allocator = "0.10.5"
 embedded-alloc = "0.6.0"
 hashbrown = { version = "0.15.2", default-features = false, features = ["alloc", "default-hasher"] }
 sha3 = { version = "0.10.8", default-features = false }
-hex = { version = "0.4.3", default-features = false }
+parse_packet = {path = "../lib/parse_packet"}
 
 [build-dependencies]
 serde_json = "1.0"
+hex = "0.4.3"
 # Uncomment if you want to use semihosting,
 # cortex-m-semihosting = "0.5"

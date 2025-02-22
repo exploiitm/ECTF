@@ -2,7 +2,7 @@ BIN_NAME = ectf
 .PHONY: flash check_locks release clean
 
 LOCK_DIR=/tmp
-DEVICES=/dev/ttyACM1 /dev/ttyACM2 /dev/ttyACM3
+DEVICES=/dev/ttyACM2 /dev/ttyACM3
 
 clean:
 	@rm -rf build
