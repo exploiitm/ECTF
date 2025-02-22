@@ -1,6 +1,7 @@
 const MAGIC: u8 = b'%';
 const FRAME_PACKET_SIZE: u8 = 125;
 const ACK_PACKET: [u8; 4]  = [b'%', b'A', 0x00, 0x00];
+pub const SUCCESFUL_SUBSCRIPTION: [u8; 4] = [b'%', b'S', 0x00, 0x00];
 const DEBUG_HEADER: [u8; 2] = [b'%', b'G']; 
 extern crate alloc;
 use alloc::{fmt::format, format};
@@ -186,31 +187,45 @@ pub fn subscription_update(board: &mut Board, header: Header) -> vec::Vec<u8> {
     sub_data
 }
 
-pub fn parse_subscriptions(_packed_sub: &[u8]) -> Subscription {
-    //TODO:: parse all the packets
-    todo!();
+pub fn succesful_subscription(board: &mut Board) {
+    board.console.write_bytes(&SUCCESFUL_SUBSCRIPTION);
+    if read_ack(board) {
+        return;
+    } else {
+        panic!();
+    }
 }
+
 
 pub fn list_subscriptions(board: &mut Board) {
     board.console.write_bytes(&ACK_PACKET);
     //TODO :: implement how to get this msg
-    let msg: &[u8] = &[
-        0x02, 0x00, 0x00, 0x00, // Number of channels (2)
-        0x01, 0x00, 0x00, 0x00, // 1st channel ID (1)
-        0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Start timestamp (128)
-        0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // End timestamp (255)
-        0x04, 0x00, 0x00, 0x00, // 1st channel ID (4)
-        0x41, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Start timestamp (0x4141)
-        0x42, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // End timestamp (0x4242)
-    ];
-
+    // let msg: &[u8] = &[
+    //     0x02, 0x00, 0x00, 0x00, // Number of channels (2)
+    //     0x01, 0x00, 0x00, 0x00, // 1st channel ID (1)
+    //     0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Start timestamp (128)
+    //     0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // End timestamp (255)
+    //     0x04, 0x00, 0x00, 0x00, // 1st channel ID (4)
+    //     0x41, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Start timestamp (0x4141)
+    //     0x42, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // End timestamp (0x4242)
+    // ];
+    let msg = board.subscriptions.list_subscriptions();
     let list_header = Header {
         opcode: Opcode::List,
         length: msg.len() as u16,
     };
     board.console.write_bytes(&list_header.as_bytes());
+    //TODO:: can list go more than 256 bytes?
+    if msg.len() > 256{
+        panic!();
+    }
     if read_ack(board) {
-        board.console.write_bytes(msg);
+        board.console.write_bytes(&msg);
+        if read_ack(board) {
+            return;
+        } else {
+            panic!();
+        }
     } else {
         panic!();
     }

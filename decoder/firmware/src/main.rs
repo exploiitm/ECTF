@@ -2,6 +2,7 @@
 #![no_main]
 pub extern crate max7800x_hal as hal;
 use alloc::vec;
+use board::host_messaging;
 use embedded_io::Write;
 pub use hal::entry;
 pub use hal::pac;
@@ -67,10 +68,15 @@ fn main() -> ! {
             }
             board::host_messaging::Opcode::Subscribe => {
                 let data = board::host_messaging::subscription_update(&mut board, header);
-                board::host_messaging::send_debug_message(&mut board, "Came Back to Main");
                 let key = get_key("Ks").unwrap();
-                board::host_messaging::send_debug_message(&mut board, "I got the key Back to Main");
-                board::decrypt_data::decrypt_sub(&mut board, data, *key);
+                if let Some(subscription) = board::decrypt_data::decrypt_sub(&mut board, data, *key){
+                    board.subscriptions.add_subscription(subscription);  
+                    host_messaging::succesful_subscription(&mut board);
+                }
+                else{
+                    board::host_messaging::send_debug_message(&mut board, "Invalid Subscription Received");
+                }
+
             }
             _ => {
                 panic!()

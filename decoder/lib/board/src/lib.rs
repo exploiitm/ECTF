@@ -12,7 +12,7 @@ use hal::pac;
 use hashbrown::HashMap;
 
 extern crate alloc;
-use alloc::string::String;
+use alloc::{string::String, vec};
 
 //Led Pins Struct
 struct LedPins {
@@ -25,6 +25,7 @@ pub struct Board {
         BuiltUartPeripheral<Uart0, hal::gpio::Pin<0, 0, Af1>, hal::gpio::Pin<0, 1, Af1>, (), ()>, // flc: hal::flc::Flc,
     pub flc: hal::flc::Flc,
     led_pins: LedPins,
+    pub subscriptions: Subscriptions,
 }
 
 pub struct Subscription {
@@ -32,7 +33,49 @@ pub struct Subscription {
     channel: u32,
     start: u64,
     end: u64,
-    keys: HashMap<String, [u8; 32]>,
+    keys: vec::Vec<u8>,
+}
+
+pub struct Subscriptions{
+    subscriptions: HashMap<u32, Option<Subscription>>,
+}
+
+impl Subscriptions {
+    pub fn new() -> Self {
+        Subscriptions {
+            subscriptions: HashMap::new(),
+        }
+    }
+    /// Adds a subscription to the given channel_id in the HashMap.
+    ///
+    /// The HashMap key is the channel_id of the subscription, and the value is
+    /// the subscription itself.
+    pub fn add_subscription(&mut self,sub: Subscription) {
+        self.subscriptions.insert(sub.channel, Some(sub));
+    }
+
+    pub fn list_subscriptions(&self) -> vec::Vec<u8> {
+        let num_channels = self.subscriptions.len() as u32;
+        let mut message = vec![0u8; 4 + (num_channels as usize) * (16+4)];
+        let num_channels_bytes = num_channels.to_le_bytes();
+        message[0..4].copy_from_slice(&num_channels_bytes);
+        let mut i = 4;
+        for (sub_id, sub) in &self.subscriptions {
+            let channel_id_bytes = sub_id.to_le_bytes();
+            message[i..(i+4)].copy_from_slice(&channel_id_bytes);
+            i += 4;
+            let sub = sub.as_ref().unwrap();
+            let start_bytes = sub.start.to_le_bytes();
+            message[i..(i+8)].copy_from_slice(&start_bytes);
+            i += 8;
+            let end_bytes = sub.end.to_le_bytes();
+            message[i..(i+8)].copy_from_slice(&end_bytes);
+            i += 8;
+
+        }
+
+        message
+    }
 }
 
 use core::panic::PanicInfo;
@@ -79,6 +122,7 @@ impl Board {
                     led_r
                 },
             },
+            subscriptions: Subscriptions::new(),
         }
     }
 
