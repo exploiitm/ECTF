@@ -18,11 +18,11 @@ def gen_secrets(channels: list[int]) -> bytes:
 
     :returns: Contents of the secrets file
     """
-   
+
     global_secrets = {}
     for chan_id in channels:
         global_secrets["K"+str(chan_id)] = secrets.token_bytes(64).hex()
-        
+
     global_secrets["Ks"] = secrets.token_bytes(64).hex()
 
     return json.dumps(global_secrets).encode('utf-8')
@@ -33,7 +33,8 @@ def gen_secrets(channels: list[int]) -> bytes:
 
 
 def parse_args():
-    """Define and parse the command line arguments
+    """
+    Define and parse the command line arguments
 
     NOTE: Your design must not change this function
     """
@@ -86,4 +87,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

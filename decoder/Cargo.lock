@@ -198,6 +198,7 @@ dependencies = [
 name = "ectf"
 version = "0.0.0"
 dependencies = [
+ "aes",
  "alloc-cortex-m",
  "board",
  "cortex-m-rt",
