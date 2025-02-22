@@ -151,17 +151,16 @@ def gen_subscription(
 
     print("cover: ", keys)
     key_data = b""
+    key_data += struct.pack("<Q", len(keys.nodes))
 
     key_data += struct.pack("<Q", len(keys.nodes))
     for index, key in keys.nodes:
         key_data += struct.pack("<Q", index)
-        key_data += b"\x00"
         key_data += key
 
     key_data += struct.pack("<Q", len(keys.leaves))
     for index, key in keys.leaves:
         key_data += struct.pack("<Q", index)
-        key_data += b"\x00"
         key_data += key
 
     # Pack keys (assuming key is 16-byte and index is 4-byte int)
@@ -179,7 +178,8 @@ def gen_subscription(
     # Encode subscription data
     iv = get_random_bytes(16)
     cipher = AES.new(K10, AES.MODE_CBC, iv)
-    padded_data = pad(subscription_data, AES.block_size)
+    pad_length = AES.block_size - (len(subscription_data) % AES.block_size)
+    padded_data = subscription_data + b'\0' * pad_length
     subscription_data_encrypted = cipher.encrypt(padded_data)
     # # we write to sub.bin
     # with open("sub.bin", "wb") as f:

@@ -5,7 +5,7 @@ pub const SUCCESFUL_SUBSCRIPTION: [u8; 4] = [b'%', b'S', 0x00, 0x00];
 const DEBUG_HEADER: [u8; 2] = [b'%', b'G']; 
 extern crate alloc;
 use alloc::{fmt::format, format};
-use embedded_io::Write;
+use embedded_io::{Read, Write};
 
 
 
@@ -155,14 +155,9 @@ pub fn read_frame_packet(board: &mut Board, header: Header) -> vec::Vec<u8>{
     board.console.write_bytes(&ACK_PACKET);
     data    
 }
-pub fn subscription_update(board: &mut Board, header: Header) -> vec::Vec<u8> {
+pub fn subscription_update(board: &mut Board, header: Header, sub_data: &mut [u8]) {
     board.console.write_bytes(&ACK_PACKET);
     let length = header.length;
-
-    let mut sub_data = vec![0u8; length as usize];
-
-    // _send_debug_message(board, format!("Length: {}", length).as_str());
-
     let num_packets: usize = length.div_ceil(256) as usize;
 
     //getting n-1 packets
@@ -175,16 +170,13 @@ pub fn subscription_update(board: &mut Board, header: Header) -> vec::Vec<u8> {
     }
 
     //getting last packet
-    let packet = _read_packet(board, length % 256);
     for i in 0..(length as usize % 256) {
-        sub_data[(num_packets - 1) * 256 + i] = packet[i];
+        let byte = board.console.read_byte();
+        sub_data[(num_packets - 1) * 256 + i] = byte;
     } 
     board.console.write_bytes(&ACK_PACKET);
 
     send_debug_message(board, format!("Read all packets").as_str());
-
-
-    sub_data
 }
 
 pub fn succesful_subscription(board: &mut Board) {

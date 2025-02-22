@@ -12,6 +12,7 @@ cortex-m-rt = { version = "0.7.5", features = [ "set-sp", "set-vtor"] }
 embedded-hal-nb = "1.0.0"
 embedded-io = "0.6.1"
 max7800x-hal = {path = "../lib/max78000fthr_hal"}
+segtree-kdf = {path = "../lib/segtree-kdf"}
 board = {path = "../lib/board"}
 panic-halt = "1.0.0"
 alloc-cortex-m = "0.4"

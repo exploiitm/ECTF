@@ -1,19 +1,26 @@
 #![no_std]
+const NUM_CHANNELS:usize = 8;
 
+use core::{array, cell::RefCell, num};
 use max7800x_hal::{
     self as hal,
     gpio::{Af1, InputOutput},
-    pac::{Peripherals, Uart0},
+    pac::{dvs::direct, Peripherals, Uart0},
     uart::BuiltUartPeripheral,
 };
+use core::mem::size_of;
 
 use hal::pac;
 
 use hashbrown::HashMap;
+use sha3::Sha3_256;
+use hmac::{Hmac, Mac};
+use heapless::FnvIndexMap;
 
 extern crate alloc;
 use alloc::{string::String, vec};
 
+use segtree_kdf::{self, Key, MAX_COVER_SIZE, KeyHasher};
 //Led Pins Struct
 struct LedPins {
     led_r: hal::gpio::Pin<2, 0, InputOutput>,
@@ -28,50 +35,136 @@ pub struct Board {
     pub subscriptions: Subscriptions,
 }
 
+pub struct SHA256Hasher {
+    key_left: Key,
+    key_right: Key
+}
+
+impl KeyHasher for SHA256Hasher {
+    fn new() -> Self {
+        let key_left_base: u32 = 0xdeadbeef;
+        let key_left = key_left_base.to_le_bytes().repeat(8).try_into().unwrap();
+        let key_right_base: u32 = 0xc0ded00d;
+        let key_right = key_right_base.to_le_bytes().repeat(8).try_into().unwrap();
+
+        
+
+        SHA256Hasher {
+            key_left,
+            key_right
+        }
+    }
+
+    fn hash(&self, data: &Key, direction: bool) -> Key {
+        let key = match direction {
+            true => self.key_right,
+            false => self.key_left
+        };
+
+        let mut mac = Hmac::<Sha3_256>::new_from_slice(&key).unwrap();
+        mac.update(data);
+
+        mac.finalize().into_bytes().try_into().unwrap()
+    }
+}
+
 pub struct Subscription {
     device_id: u32,
     channel: u32,
     start: u64,
     end: u64,
-    keys: vec::Vec<u8>,
+    kdf: segtree_kdf::SegtreeKDF<SHA256Hasher>,
 }
 
-pub struct Subscriptions{
-    subscriptions: HashMap<u32, Option<Subscription>>,
+pub struct Subscriptions {
+    size: u8,
+    subscriptions: [Option<Subscription>; NUM_CHANNELS],
+}
+
+impl Subscription {
+    pub fn new(device_id: u32, channel: u32, start: u64, end: u64, keys: &[u8]) -> Self {
+        let num_nodes_bytes = keys[0..8].try_into().unwrap();
+        let num_nodes = u64::from_le_bytes(num_nodes_bytes) as usize;
+
+        let keys = &keys[8..].to_vec();
+
+        let mut cover : [Option<segtree_kdf::Node>; segtree_kdf::MAX_COVER_SIZE] = array::from_fn(|_| None);
+        
+
+        for i in  0..num_nodes{
+            let id_bytes = keys[i*40..i*40+8].try_into().unwrap();
+            let id = u64::from_le_bytes(id_bytes);
+            let key_bytes = &keys[i*40+8..i*40+40];
+            let node = segtree_kdf::Node {
+                id,
+                key: key_bytes.try_into().unwrap(),
+            };
+            cover[i] = Some(node);
+        }
+
+        let mut last_layer: [Option<segtree_kdf::Node>; 2] = array::from_fn(|_| None);
+        let num_leaves = keys.len()/40 - num_nodes;
+
+         for i in 0..num_leaves{
+         let id_bytes = keys[(num_nodes+i)*40..(num_nodes+i)*40+8].try_into().unwrap();
+         let id = u64::from_le_bytes(id_bytes);
+         let key_bytes = keys[(num_nodes+i)*40+8..(num_nodes+i)*40+40].try_into().unwrap();
+         let node = segtree_kdf::Node {
+             id,
+             key: key_bytes,
+         }; 
+         last_layer[i] = Some(node);
+        }
+        let kdf = segtree_kdf::SegtreeKDF::<SHA256Hasher>::new(cover, last_layer);
+
+
+        Subscription {
+            device_id,
+            channel,
+            start,
+            end,
+            kdf
+        }
+    }
 }
 
 impl Subscriptions {
     pub fn new() -> Self {
         Subscriptions {
-            subscriptions: HashMap::new(),
+            size: 0,
+            subscriptions: array::from_fn(|_| None)
         }
     }
-    /// Adds a subscription to the given channel_id in the HashMap.
-    ///
-    /// The HashMap key is the channel_id of the subscription, and the value is
-    /// the subscription itself.
     pub fn add_subscription(&mut self,sub: Subscription) {
-        self.subscriptions.insert(sub.channel, Some(sub));
+        for i in 0..NUM_CHANNELS {
+            // TODO: Handle collisions
+            // TODO: Check what needs to be done for more than 8 channels
+            if self.subscriptions[i].is_none() {
+                self.subscriptions[i] = Some(sub);
+                self.size += 1;
+                return;
+            }
+        }
     }
 
     pub fn list_subscriptions(&self) -> vec::Vec<u8> {
-        let num_channels = self.subscriptions.len() as u32;
+        let num_channels = self.size as u32;
         let mut message = vec![0u8; 4 + (num_channels as usize) * (16+4)];
         let num_channels_bytes = num_channels.to_le_bytes();
         message[0..4].copy_from_slice(&num_channels_bytes);
         let mut i = 4;
-        for (sub_id, sub) in &self.subscriptions {
-            let channel_id_bytes = sub_id.to_le_bytes();
-            message[i..(i+4)].copy_from_slice(&channel_id_bytes);
-            i += 4;
-            let sub = sub.as_ref().unwrap();
-            let start_bytes = sub.start.to_le_bytes();
-            message[i..(i+8)].copy_from_slice(&start_bytes);
-            i += 8;
-            let end_bytes = sub.end.to_le_bytes();
-            message[i..(i+8)].copy_from_slice(&end_bytes);
-            i += 8;
-
+        for  sub in &self.subscriptions[0..num_channels as usize] {
+            if let Some(sub) = sub {
+                let channel_id_bytes = sub.channel.to_le_bytes();
+                message[i..(i+4)].copy_from_slice(&channel_id_bytes);
+                i += 4;
+                let start_bytes = sub.start.to_le_bytes();
+                message[i..(i+8)].copy_from_slice(&start_bytes);
+                i += 8;
+                let end_bytes = sub.end.to_le_bytes();
+                message[i..(i+8)].copy_from_slice(&end_bytes);
+                i += 8;
+            }
         }
 
         message
