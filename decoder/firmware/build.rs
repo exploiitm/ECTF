@@ -52,7 +52,8 @@ fn main() {
 
     // Generate Rust code with constants
     let mut rust_code = String::new();
-    rust_code.push_str(&SECRETS_HEADER);
+    rust_code.push_str("// Auto-generated file, do not edit manually!\n");
+
     if let serde_json::Value::Object(map) = json {
         rust_code.push_str(
         "fn get_key(key: &str) -> Option<&'static [u8; 64]> {
