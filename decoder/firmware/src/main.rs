@@ -4,12 +4,12 @@ pub extern crate max7800x_hal as hal;
 use alloc::vec;
 use board::host_messaging;
 use board::host_messaging::send_debug_message;
+use board::SHA256Hasher;
 use embedded_io::Write;
 pub use hal::entry;
 pub use hal::pac;
 use hal::pac::adc::limit::W;
 use segtree_kdf;
-use board::SHA256Hasher;
 
 include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
 // this comment is useless, added by nithin.
@@ -75,19 +75,31 @@ fn main() -> ! {
             board::host_messaging::Opcode::Subscribe => {
                 let mut data = [0u8; 5120];
                 let length = header.length.clone();
-                board::host_messaging::subscription_update(&mut board, header, &mut data[0..length as usize]);
+                board::host_messaging::subscription_update(
+                    &mut board,
+                    header,
+                    &mut data[0..length as usize],
+                );
                 let key = get_key("Ks").unwrap();
                 host_messaging::send_debug_message(&mut board, "Worked broooooo");
 
-                if let Some(subscription) = board::decrypt_data::decrypt_sub(&mut board, &mut data[0..length as usize], *key){
-                    host_messaging::send_debug_message(&mut board, "Worked broooooo till decrypt sub");
-                    board.subscriptions.add_subscription(subscription);  
+                if let Some(subscription) = board::decrypt_data::decrypt_sub(
+                    &mut board,
+                    &mut data[0..length as usize],
+                    *key,
+                ) {
+                    host_messaging::send_debug_message(
+                        &mut board,
+                        "Worked broooooo till decrypt sub",
+                    );
+                    board.subscriptions.add_subscription(subscription);
                     // host_messaging::succesful_subscription(&mut board);
                     host_messaging::send_debug_message(&mut board, "Worked broooooo till the end");
-
-                }
-                else{
-                    board::host_messaging::send_debug_message(&mut board, "Invalid Subscription Received");
+                } else {
+                    board::host_messaging::send_debug_message(
+                        &mut board,
+                        "Invalid Subscription Received",
+                    );
                 }
             }
             _ => {

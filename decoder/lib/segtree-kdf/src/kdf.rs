@@ -48,7 +48,7 @@ impl<H: KeyHasher> SegtreeKDF<H> {
         }
     }
 
-    fn try_derive(&self, id: u64, level: usize/* , cache: &mut Cache */) -> Option<Key> {
+    fn try_derive(&self, id: u64, level: usize /* , cache: &mut Cache */) -> Option<Key> {
         for c in &self.cover[level] {
             if let Some(node) = c {
                 if node.id == id {
@@ -61,7 +61,7 @@ impl<H: KeyHasher> SegtreeKDF<H> {
             return None;
         }
 
-        let par_key = self.try_derive(id >> 1, level - 1/* , cache */)?;
+        let par_key = self.try_derive(id >> 1, level - 1 /* , cache */)?;
         let node = Node {
             id,
             key: self.hash.hash(&par_key, id & 1 == 1),
@@ -88,7 +88,7 @@ impl<H: KeyHasher> SegtreeKDF<H> {
         }
 
         let par_id = (id >> 1) | (1 << 63);
-        let par = self.try_derive(par_id, TREE_HEIGHT - 1/* , &mut cache */)?;
+        let par = self.try_derive(par_id, TREE_HEIGHT - 1 /* , &mut cache */)?;
         let node = Node {
             id,
             key: self.hash.hash(&par, id & 1 == 1),

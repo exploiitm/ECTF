@@ -1,13 +1,11 @@
 const MAGIC: u8 = b'%';
 const FRAME_PACKET_SIZE: u8 = 125;
-const ACK_PACKET: [u8; 4]  = [b'%', b'A', 0x00, 0x00];
+const ACK_PACKET: [u8; 4] = [b'%', b'A', 0x00, 0x00];
 pub const SUCCESFUL_SUBSCRIPTION: [u8; 4] = [b'%', b'S', 0x00, 0x00];
-const DEBUG_HEADER: [u8; 2] = [b'%', b'G']; 
+const DEBUG_HEADER: [u8; 2] = [b'%', b'G'];
 extern crate alloc;
 use alloc::{fmt::format, format};
 use embedded_io::{Read, Write};
-
-
 
 pub enum Opcode {
     Decode,
@@ -84,7 +82,6 @@ pub fn read_ack(board: &mut Board) -> bool {
     }
 }
 
-
 // pub fn read_packet(board: &mut Board, length: u16) -> Vec<u8> {
 //     if length > 256 {
 //         panic!();
@@ -134,7 +131,7 @@ fn _read_packet(board: &mut Board, length: u16) -> Vec<u8> {
     }
 
     let mut data = vec![0; length as usize];
-    for i in 0..length{
+    for i in 0..length {
         let byte = board.console.read_byte();
         data[i as usize] = byte;
     }
@@ -142,8 +139,8 @@ fn _read_packet(board: &mut Board, length: u16) -> Vec<u8> {
     return data;
 }
 
-pub fn read_frame_packet(board: &mut Board, header: Header) -> vec::Vec<u8>{
-    if header.length != 125{
+pub fn read_frame_packet(board: &mut Board, header: Header) -> vec::Vec<u8> {
+    if header.length != 125 {
         panic!();
     }
     board.console.write_bytes(&ACK_PACKET);
@@ -153,7 +150,7 @@ pub fn read_frame_packet(board: &mut Board, header: Header) -> vec::Vec<u8>{
         data[i] = byte;
     }
     board.console.write_bytes(&ACK_PACKET);
-    data    
+    data
 }
 pub fn subscription_update(board: &mut Board, header: Header, sub_data: &mut [u8]) {
     board.console.write_bytes(&ACK_PACKET);
@@ -173,7 +170,7 @@ pub fn subscription_update(board: &mut Board, header: Header, sub_data: &mut [u8
     for i in 0..(length as usize % 256) {
         let byte = board.console.read_byte();
         sub_data[(num_packets - 1) * 256 + i] = byte;
-    } 
+    }
     board.console.write_bytes(&ACK_PACKET);
 
     send_debug_message(board, format!("Read all packets").as_str());
@@ -187,7 +184,6 @@ pub fn succesful_subscription(board: &mut Board) {
         panic!();
     }
 }
-
 
 pub fn list_subscriptions(board: &mut Board) {
     board.console.write_bytes(&ACK_PACKET);
@@ -208,7 +204,7 @@ pub fn list_subscriptions(board: &mut Board) {
     };
     board.console.write_bytes(&list_header.as_bytes());
     //TODO:: can list go more than 256 bytes?
-    if msg.len() > 256{
+    if msg.len() > 256 {
         panic!();
     }
     if read_ack(board) {

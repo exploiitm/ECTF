@@ -14,7 +14,6 @@ use max7800x_hal::pac::dma::ch;
 use crate::{Board, host_messaging};
 use sha3::{Digest, Sha3_256};
 
-
 use crate::Subscription;
 // fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16]) -> vec::Vec<u8> {
 //     Aes256CbcDec::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))
@@ -34,7 +33,9 @@ pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 64]) -> Op
     let k10 = hasher.finalize();
     let k10_new = GenericArray::from_slice(&k10);
     let decryptor = Aes256CbcDec::new(k10_new, iv);
-    let decrypted_data = decryptor.decrypt_padded_vec_mut::<NoPadding>(ciphertext).unwrap();
+    let decrypted_data = decryptor
+        .decrypt_padded_vec_mut::<NoPadding>(ciphertext)
+        .unwrap();
     //
 
     host_messaging::send_debug_message(board, "Decryption of data worked in decrypt_sub");
@@ -43,15 +44,17 @@ pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 64]) -> Op
     let channel_bytes: [u8; 4] = decrypted_data[12..16].try_into().unwrap();
     let start_bytes: [u8; 8] = decrypted_data[16..24].try_into().unwrap();
     let end_bytes: [u8; 8] = decrypted_data[24..32].try_into().unwrap();
-    host_messaging::send_debug_message(board, &format!("Your momma so fat, le couldn't handle her"));
+    host_messaging::send_debug_message(
+        board,
+        &format!("Your momma so fat, le couldn't handle her"),
+    );
     let key_data = &decrypted_data[32..u64::from_le_bytes(length_bytes) as usize];
     let device_id = u32::from_le_bytes(device_id_bytes);
     let channel = u32::from_le_bytes(channel_bytes);
     let start = u64::from_le_bytes(start_bytes);
     let end = u64::from_le_bytes(end_bytes);
 
-
-    if device_id != 0xdeadbeef{
+    if device_id != 0xdeadbeef {
         host_messaging::send_debug_message(board, &format!("device id does not match"));
         return None;
     }
@@ -59,5 +62,4 @@ pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 64]) -> Op
     host_messaging::send_debug_message(board, &format!("device id {:x?}", &decrypted_data[0..10]));
     let subscription = Subscription::new(device_id, channel, start, end, key_data);
     Some(subscription)
-    
 }

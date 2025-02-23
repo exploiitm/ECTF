@@ -5,11 +5,13 @@ edition = "2024"
 
 [dependencies]
 max7800x-hal = {path = "../max78000fthr_hal"}
+segtree-kdf = {path = "../segtree-kdf"}
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 embedded-io = "0.6.1"
-heapless = "0.8.0"
+heapless = { version = "0.8.0", default-features = false }
 hashbrown = { version = "0.15.2", default-features = false }
 aes = { version = "0.8.4", default-features = false }
 cbc = { version = "0.1.2", default-features = false, features = ["block-padding", "alloc"] }
 cipher = { version = "0.4.4", default-features = false }
 sha3 = { version = "0.10.8", default-features = false }
+hmac = { version = "0.12.1", default-features = false }

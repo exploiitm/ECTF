@@ -10,12 +10,12 @@
 //!
 //! The build script also sets the linker flags to tell it which link script to use.
 
+use hex;
 use serde_json;
 use std::env;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
-use hex;
 
 fn main() {
     // Put `memory.x` in our output directory and ensure it's
@@ -56,30 +56,25 @@ fn main() {
 
     if let serde_json::Value::Object(map) = json {
         rust_code.push_str(
-        "fn get_key(key: &str) -> Option<&'static [u8; 64]> {
-            match key { \n");
+            "fn get_key(key: &str) -> Option<&'static [u8; 64]> {
+            match key { \n",
+        );
         for (key, value) in map {
             if let Some(val) = value.as_str() {
                 let hex_val = hex::decode(val);
                 let bytes = hex_val.unwrap();
                 let array = format!("{:?}", bytes);
 
-
-                rust_code.push_str(&format!(
-                    "\"{}\" => Some(&{}),\n",
-                    key,
-                    array
-                ));
+                rust_code.push_str(&format!("\"{}\" => Some(&{}),\n", key, array));
             }
         }
 
-
-        println!("{}", rust_code); 
+        println!("{}", rust_code);
     }
     rust_code.push_str(
         "_ => None,
             }
-        }"
+        }",
     );
     let out_dir = env::var("OUT_DIR").unwrap();
     let rust_code_2 = rust_code.clone();
