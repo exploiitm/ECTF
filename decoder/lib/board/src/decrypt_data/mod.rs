@@ -44,6 +44,7 @@ pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 64]) -> Op
     let channel_bytes: [u8; 4] = decrypted_data[12..16].try_into().unwrap();
     let start_bytes: [u8; 8] = decrypted_data[16..24].try_into().unwrap();
     let end_bytes: [u8; 8] = decrypted_data[24..32].try_into().unwrap();
+
     host_messaging::send_debug_message(
         board,
         &format!("Your momma so fat, le couldn't handle her"),

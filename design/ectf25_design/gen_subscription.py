@@ -171,6 +171,7 @@ def gen_subscription(
         channel_bytes + start_bytes + end_bytes + key_data
 
     length = len(subscription_data)
+    print("CHECK THE LENGTH: ", length)
     length_bytes = struct.pack("<Q", length)
     subscription_data = length_bytes + subscription_data
     print(subscription_data)

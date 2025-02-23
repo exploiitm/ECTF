@@ -93,7 +93,6 @@ fn main() -> ! {
                         "Worked broooooo till decrypt sub",
                     );
                     board.subscriptions.add_subscription(subscription);
-                    // host_messaging::succesful_subscription(&mut board);
                     host_messaging::send_debug_message(&mut board, "Worked broooooo till the end");
                 } else {
                     board::host_messaging::send_debug_message(

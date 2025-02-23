@@ -135,12 +135,18 @@ impl Subscriptions {
     }
     pub fn add_subscription(&mut self, sub: Subscription) {
         for i in 0..NUM_CHANNELS {
-            // TODO: Handle collisions
-            // TODO: Check what needs to be done for more than 8 channels
-            if self.subscriptions[i].is_none() {
-                self.subscriptions[i] = Some(sub);
-                self.size += 1;
-                return;
+            match &self.subscriptions[i] {
+                Some(subscription) => {
+                    if subscription.channel == sub.channel {
+                        self.subscriptions[i] = Some(sub);
+                        return;
+                    }
+                }
+                None => {
+                    self.subscriptions[i] = Some(sub);
+                    self.size += 1;
+                    return;
+                }
             }
         }
     }
