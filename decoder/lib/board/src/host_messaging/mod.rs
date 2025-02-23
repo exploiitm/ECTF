@@ -29,7 +29,7 @@ impl Opcode {
     }
 }
 
-use crate::Subscription;
+use crate::{CHANNEL_ID_SIZE, MAX_NUM_CHANNELS, Subscription, TIMESTAMP_SIZE};
 
 use super::Board;
 use alloc::vec;
@@ -197,16 +197,16 @@ pub fn list_subscriptions(board: &mut Board) {
     //     0x41, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Start timestamp (0x4141)
     //     0x42, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // End timestamp (0x4242)
     // ];
-    let msg = board.subscriptions.list_subscriptions();
+
+    let mut msg = [0u8; 4 + (2 * TIMESTAMP_SIZE + CHANNEL_ID_SIZE) * MAX_NUM_CHANNELS];
+
+    let length = board.subscriptions.list_subscriptions(&mut msg);
     let list_header = Header {
         opcode: Opcode::List,
-        length: msg.len() as u16,
+        length: length as u16,
     };
     board.console.write_bytes(&list_header.as_bytes());
-    //TODO:: can list go more than 256 bytes?
-    if msg.len() > 256 {
-        panic!();
-    }
+
     if read_ack(board) {
         board.console.write_bytes(&msg);
         if read_ack(board) {

@@ -1,24 +1,24 @@
 #![no_std]
-const NUM_CHANNELS: usize = 8;
 
-use core::mem::size_of;
-use core::{array, cell::RefCell, num};
+pub const CHANNEL_ID_SIZE: usize = 4;
+pub const TIMESTAMP_SIZE: usize = 8;
+pub const MAX_NUM_CHANNELS: usize = 8;
+
+use core::array;
 use max7800x_hal::{
     self as hal,
     gpio::{Af1, InputOutput},
-    pac::{Peripherals, Uart0, dvs::direct},
+    pac::{Peripherals, Uart0},
     uart::BuiltUartPeripheral,
 };
 
 use hal::pac;
 
-use hashbrown::HashMap;
-use heapless::FnvIndexMap;
 use hmac::{Hmac, Mac};
 use sha3::Sha3_256;
 
 extern crate alloc;
-use alloc::{string::String, vec};
+// use alloc::vec;
 
 use segtree_kdf::{self, Key, KeyHasher, MAX_COVER_SIZE};
 //Led Pins Struct
@@ -76,7 +76,7 @@ pub struct Subscription {
 
 pub struct Subscriptions {
     size: u8,
-    subscriptions: [Option<Subscription>; NUM_CHANNELS],
+    subscriptions: [Option<Subscription>; MAX_NUM_CHANNELS],
 }
 
 impl Subscription {
@@ -134,7 +134,7 @@ impl Subscriptions {
         }
     }
     pub fn add_subscription(&mut self, sub: Subscription) {
-        for i in 0..NUM_CHANNELS {
+        for i in 0..MAX_NUM_CHANNELS {
             match &self.subscriptions[i] {
                 Some(subscription) => {
                     if subscription.channel == sub.channel {
@@ -149,29 +149,28 @@ impl Subscriptions {
                 }
             }
         }
+        panic!("It's okay bro, you tried");
     }
 
-    pub fn list_subscriptions(&self) -> vec::Vec<u8> {
+    pub fn list_subscriptions(&self, message: &mut [u8]) -> u8 {
         let num_channels = self.size as u32;
-        let mut message = vec![0u8; 4 + (num_channels as usize) * (16 + 4)];
         let num_channels_bytes = num_channels.to_le_bytes();
-        message[0..4].copy_from_slice(&num_channels_bytes);
-        let mut i = 4;
+        message[0..num_channels_bytes.len()].copy_from_slice(&num_channels_bytes);
+        let mut length = num_channels_bytes.len();
         for sub in &self.subscriptions[0..num_channels as usize] {
             if let Some(sub) = sub {
                 let channel_id_bytes = sub.channel.to_le_bytes();
-                message[i..(i + 4)].copy_from_slice(&channel_id_bytes);
-                i += 4;
+                message[length..(length + CHANNEL_ID_SIZE)].copy_from_slice(&channel_id_bytes);
+                length += CHANNEL_ID_SIZE;
                 let start_bytes = sub.start.to_le_bytes();
-                message[i..(i + 8)].copy_from_slice(&start_bytes);
-                i += 8;
+                message[length..(length + TIMESTAMP_SIZE)].copy_from_slice(&start_bytes);
+                length += TIMESTAMP_SIZE;
                 let end_bytes = sub.end.to_le_bytes();
-                message[i..(i + 8)].copy_from_slice(&end_bytes);
-                i += 8;
+                message[length..(length + TIMESTAMP_SIZE)].copy_from_slice(&end_bytes);
+                length += TIMESTAMP_SIZE;
             }
         }
-
-        message
+        length as u8
     }
 }
 
