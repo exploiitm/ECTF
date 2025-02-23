@@ -18,5 +18,5 @@ __pycache__/
 *.pyc
 *.pyo
 *.bin
-./**/Cargo.lock
-./**/secrets.json
+decoder/Cargo.lock
+design/**/secrets.json
