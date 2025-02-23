@@ -68,15 +68,15 @@ impl KeyHasher for SHA256Hasher {
 
 pub struct Subscription {
     device_id: u32,
-    channel: u32,
-    start: u64,
-    end: u64,
-    kdf: segtree_kdf::SegtreeKDF<SHA256Hasher>,
+    pub channel: u32,
+    pub start: u64,
+    pub end: u64,
+    pub kdf: segtree_kdf::SegtreeKDF<SHA256Hasher>,
 }
 
 pub struct Subscriptions {
-    size: u8,
-    subscriptions: [Option<Subscription>; MAX_NUM_CHANNELS],
+    pub size: u8,
+    pub subscriptions: [Option<Subscription>; MAX_NUM_CHANNELS],
 }
 
 impl Subscription {

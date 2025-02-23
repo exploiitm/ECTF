@@ -90,9 +90,9 @@ class Encoder:
 
         # Construct packet header
         packet_header = (
-            timestamp.to_bytes(8, 'big') +  # 64-bit timestamp
-            channel.to_bytes(4, 'big') +    # 32-bit channel ID
-            len(frame).to_bytes(1, 'big') + # 8-bit frame length
+            timestamp.to_bytes(8, 'little') +  # 64-bit timestamp
+            channel.to_bytes(4, 'little') +    # 32-bit channel ID
+            len(frame).to_bytes(1, 'little') + # 8-bit frame length
             iv                              # 16-bytes initialisation vector
         )
         packet_unsigned = packet_header + encrypted_frame

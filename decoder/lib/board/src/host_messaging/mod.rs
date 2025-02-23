@@ -124,33 +124,30 @@ pub fn send_debug_message(board: &mut Board, message: &str) {
     board.console.write_bytes(message.as_bytes());
 }
 
-#[inline(always)]
-fn _read_packet(board: &mut Board, length: u16) -> Vec<u8> {
-    if length > 256 {
-        panic!();
-    }
+// #[inline(always)]
+// fn _read_packet(board: &mut Board, length: u16) -> Vec<u8> {
+//     if length > 256 {
+//         panic!();
+//     }
 
-    let mut data = vec![0; length as usize];
-    for i in 0..length {
-        let byte = board.console.read_byte();
-        data[i as usize] = byte;
-    }
+//     let mut data = vec![0; length as usize];
+//     for i in 0..length {
+//         let byte = board.console.read_byte();
+//         data[i as usize] = byte;
+//     }
 
-    return data;
-}
+//     return data;
+// }
 
-pub fn read_frame_packet(board: &mut Board, header: Header) -> vec::Vec<u8> {
-    if header.length != 125 {
+pub fn read_frame_packet(board: &mut Board, header: Header, data: &mut [u8; 125]) {
+    if header.length as usize != data.len() {
         panic!();
     }
     board.console.write_bytes(&ACK_PACKET);
-    let mut data = vec![0u8; 125];
-    for i in 0..125 {
-        let byte = board.console.read_byte();
-        data[i] = byte;
+    for byte in data {
+        *byte = board.console.read_byte();
     }
     board.console.write_bytes(&ACK_PACKET);
-    data
 }
 pub fn subscription_update(board: &mut Board, header: Header, sub_data: &mut [u8]) {
     board.console.write_bytes(&ACK_PACKET);
@@ -187,16 +184,6 @@ pub fn succesful_subscription(board: &mut Board) {
 
 pub fn list_subscriptions(board: &mut Board) {
     board.console.write_bytes(&ACK_PACKET);
-    //TODO :: implement how to get this msg
-    // let msg: &[u8] = &[
-    //     0x02, 0x00, 0x00, 0x00, // Number of channels (2)
-    //     0x01, 0x00, 0x00, 0x00, // 1st channel ID (1)
-    //     0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Start timestamp (128)
-    //     0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // End timestamp (255)
-    //     0x04, 0x00, 0x00, 0x00, // 1st channel ID (4)
-    //     0x41, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Start timestamp (0x4141)
-    //     0x42, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // End timestamp (0x4242)
-    // ];
 
     let mut msg = [0u8; 4 + (2 * TIMESTAMP_SIZE + CHANNEL_ID_SIZE) * MAX_NUM_CHANNELS];
 

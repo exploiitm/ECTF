@@ -2,6 +2,7 @@
 #![no_main]
 pub extern crate max7800x_hal as hal;
 use alloc::vec;
+use board::decrypt_data;
 use board::host_messaging;
 use board::host_messaging::send_debug_message;
 use board::SHA256Hasher;
@@ -9,13 +10,10 @@ use embedded_io::Write;
 pub use hal::entry;
 pub use hal::pac;
 use hal::pac::adc::limit::W;
+use parse_packet::parse_packet;
 use segtree_kdf;
-
 include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
 // this comment is useless, added by nithin.
-
-// lib imports
-pub extern crate parse_packet as parser;
 
 //print function:
 //board.console.write_bytes(b"Hello world\r\n")
@@ -66,6 +64,7 @@ fn main() -> ! {
     }
     // let size = size_of::<segtree_kdf::SegtreeKDF::<SHA256Hasher>>();
     // board::host_messaging::send_debug_message(&mut board, &format!("Size of SegtreeKDF: {}", size));
+    let mut most_recent_timestamp = None;
     loop {
         let header: board::host_messaging::Header = board::host_messaging::read_header(&mut board);
         match header.opcode {
@@ -94,12 +93,51 @@ fn main() -> ! {
                     );
                     board.subscriptions.add_subscription(subscription);
                     host_messaging::send_debug_message(&mut board, "Worked broooooo till the end");
+                    host_messaging::succesful_subscription(&mut board);
                 } else {
                     board::host_messaging::send_debug_message(
                         &mut board,
                         "Invalid Subscription Received",
                     );
                 }
+            }
+            board::host_messaging::Opcode::Decode => {
+                let length = header.length;
+                if length != 125 {
+                    panic!("Arivoli is black");
+                }
+                let mut frame_data = [0u8; 125];
+                board::host_messaging::read_frame_packet(&mut board, header, &mut frame_data);
+                let packet = parse_packet(&frame_data);
+                host_messaging::send_debug_message(&mut board, "Recieved packet nigs");
+                let mut sub_index = None;
+                for index in 0..board.subscriptions.size {
+                    if board.subscriptions.subscriptions[index as usize]
+                        .as_ref()
+                        .unwrap()
+                        .channel
+                        == packet.channel_id
+                    {
+                        sub_index = Some(index);
+                        break;
+                    }
+                }
+                let subscription = board.subscriptions.subscriptions[sub_index.unwrap() as usize]
+                    .as_ref()
+                    .unwrap();
+
+                if let Some(rec) = most_recent_timestamp {
+                    if packet.timestamp < rec {
+                        panic!("lol nigger");
+                    }
+                }
+                most_recent_timestamp = Some(packet.timestamp);
+
+                let key = subscription.kdf.derive(packet.timestamp).unwrap();
+                // TODO check hmac here
+                // TODO decrypt
+                // TODO write back
+                // TODO verify above
             }
             _ => {
                 panic!()

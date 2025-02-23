@@ -9,17 +9,18 @@ use aes::cipher::generic_array::GenericArray;
 use aes::cipher::{BlockDecryptMut, KeyIvInit};
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 use alloc::format;
+use alloc::vec;
 use max7800x_hal::pac::dma::ch;
 
 use crate::{Board, host_messaging};
 use sha3::{Digest, Sha3_256};
 
 use crate::Subscription;
-// fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16]) -> vec::Vec<u8> {
-//     Aes256CbcDec::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))
-//         .decrypt_padded_vec_mut::<NoPadding>(data_enc)
-//         .unwrap()
-// }
+fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16]) -> vec::Vec<u8> {
+    Aes256CbcDec::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))
+        .decrypt_padded_vec_mut::<NoPadding>(data_enc)
+        .unwrap()
+}
 
 pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 64]) -> Option<Subscription> {
     let iv = GenericArray::from_slice(&encrypted_sub[0..16]);
