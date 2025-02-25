@@ -52,6 +52,7 @@ def derive_right(parent_key: Bytes32) -> Bytes32:
     return HASH_FUNCTION(parent_key, right_key_seed)
 
 
+
 def derive_left(parent_key: Bytes32) -> Bytes32:
     '''Derives the left segment key from the parent key'''
     left_key_seed = struct.pack(

@@ -32,7 +32,6 @@ def aes_based_hash(input_data: Bytes32, key: Bytes32) -> Bytes32:
     encrypted_data = cipher.encrypt(input_data)
     return bytes(a ^ b for a, b in zip(encrypted_data, input_data))
 
-
 # Key derivation section  ---------------------------------------------------------------------------------
 # Configuration Constants
 ENCODER_DEPTH = 64  # Maximum depth for key derivation
@@ -136,11 +135,12 @@ class Encoder:
 # Test main code --------------------------------------------------------------------------------------------
 
 
+
+
 def main():
     """Test script for one-shot encoding of a frame."""
     parser = argparse.ArgumentParser(prog="ectf25_design.encoder")
-    parser.add_argument("secrets_file", type=argparse.FileType(
-        "rb"), help="Path to the secrets file")
+    parser.add_argument("secrets_file", type=argparse.FileType("rb"), help="Path to the secrets file")
     parser.add_argument("channel", type=int, help="Channel to encode for")
     parser.add_argument("frame", help="Contents of the frame")
     parser.add_argument("timestamp", type=int, help="64-bit timestamp to use")
@@ -149,10 +149,6 @@ def main():
     encoder = Encoder(args.secrets_file.read())
     encoded_packet = encoder.encode(
         args.channel, args.frame.encode(), args.timestamp)
-
-    # print("Repr Packet:", repr(encoded_packet))
-    # print("Hex Packet:", encoded_packet.hex())
-    # print("Packet Length:", len(encoded_packet))
 
 
 if __name__ == "__main__":
