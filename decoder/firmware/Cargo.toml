@@ -31,3 +31,6 @@ serde_json = "1.0"
 hex = "0.4.3"
 # Uncomment if you want to use semihosting,
 # cortex-m-semihosting = "0.5"
+
+[profiles.release]
+strip = "symbols"
