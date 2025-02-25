@@ -2,7 +2,7 @@
 
 pub const CHANNEL_ID_SIZE: usize = 4;
 pub const TIMESTAMP_SIZE: usize = 8;
-pub const MAX_NUM_CHANNELS: usize = 1;
+pub const MAX_NUM_CHANNELS: usize = 8;
 
 use cipher::KeyInit;
 use core::array;

@@ -39,9 +39,10 @@ type HmacSha = Hmac<Sha3_256>;
 static HEAP: Heap = Heap::empty();
 
 // 16KB heap (adjust based on your needs)
-const HEAP_SIZE: usize = 1024 * 64;
+const HEAP_SIZE: usize = 1024 * 16;
 static mut HEAP_MEM: [core::mem::MaybeUninit<u8>; HEAP_SIZE] =
     [core::mem::MaybeUninit::uninit(); HEAP_SIZE];
+
 
 #[entry]
 fn main() -> ! {

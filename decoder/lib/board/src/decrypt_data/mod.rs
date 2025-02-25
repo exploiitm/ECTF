@@ -70,5 +70,6 @@ pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 32]) -> Op
 
     host_messaging::send_debug_message(board, &format!("device id {:x?}", &decrypted_data[0..10]));
     let subscription = Subscription::new(device_id, channel, start, end, key_data);
+    host_messaging::send_debug_message(board, "created subs obj.");
     Some(subscription)
 }
