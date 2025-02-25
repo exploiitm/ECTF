@@ -23,7 +23,7 @@ pub fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16], buf: &mu
     buf.copy_from_slice(&data);
 }
 
-pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 64]) -> Option<Subscription> {
+pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 32]) -> Option<Subscription> {
     host_messaging::send_debug_message(board, &format!("encrypted sub length: {}", encrypted_sub.len()));
     let iv = GenericArray::from_slice(&encrypted_sub[0..16]);
     let ciphertext = &encrypted_sub[16..];

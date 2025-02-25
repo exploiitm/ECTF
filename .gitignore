@@ -20,3 +20,6 @@ __pycache__/
 *.bin
 decoder/Cargo.lock
 design/**/secrets.json
+
+tools/
+test.json

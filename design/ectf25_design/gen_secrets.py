@@ -18,12 +18,14 @@ def gen_secrets(channels: list[int]) -> bytes:
 
     :returns: Contents of the secrets file
     """
+    assert 0 not in channels, "Channel 0 (Emergency Broadcast) is automatically added"
+    channels.append(0)
 
     global_secrets = {}
     for chan_id in channels:
-        global_secrets["K"+str(chan_id)] = secrets.token_bytes(64).hex()
+        global_secrets["K"+str(chan_id)] = secrets.token_bytes(32).hex()
 
-    global_secrets["Ks"] = secrets.token_bytes(64).hex()
+    global_secrets["Ks"] = secrets.token_bytes(32).hex()
 
     return json.dumps(global_secrets).encode('utf-8')
 

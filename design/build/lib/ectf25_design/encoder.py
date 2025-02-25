@@ -91,25 +91,29 @@ class Encoder:
         :param timestamp: 64-bit timestamp for encoding
         :return: Encoded frame ready for transmission
         """
+
         if "K" + str(channel) not in self.global_secrets:
             raise ValueError(
                 "Invalid channel: No secret key found for the given channel")
 
-        # Retrieve the master key for the given channel
-        master_key = bytes.fromhex(self.global_secrets["K" + str(channel)])
+        if channel == 0:
+            timestamp_key = bytes.fromhex(self.global_secrets["K0"])
 
-        # Generate a timestamp-specific key using hierarchical derivation
-        timestamp_key = derive_key(master_key, timestamp)
+        else:
+            # Retrieve the master key for the given channel
+            master_key = bytes.fromhex(self.global_secrets["K" + str(channel)])
+            # Generate a timestamp-specific key using hierarchical derivation
+            timestamp_key = derive_key(master_key, timestamp)
 
         # Generate a unique IV
         iv = os.urandom(16)
-
         # Encrypt the frame using AES-ECB with the derived key
         cipher = AES.new(timestamp_key, AES.MODE_CBC, iv=iv)
         encrypted_frame = cipher.encrypt(pad_to_64_bytes(frame))
 
-        print("Unencrypted Frame:", list(pad_to_64_bytes(frame)))
-        print("Encrypted Frame:", list(encrypted_frame))
+        # print("Unencrypted Frame:", list(pad_to_64_bytes(frame)))
+        # print("Encrypted Frame:", list(encrypted_frame))
+    
         # Construct packet header
         packet_header = (
             timestamp.to_bytes(8, 'little') +  # 64-bit timestamp
@@ -122,9 +126,9 @@ class Encoder:
         # Generate HMAC signature using the same timestamp key
         signature = hmac.new(timestamp_key, packet_unsigned,
                              hashlib.sha3_256).digest()
-        print("Key:", list(timestamp_key))
-        print("Data:", list(packet_unsigned))
-        print("Hmac:", list(signature))
+        # print("Key:", list(timestamp_key))
+        # print("Data:", list(packet_unsigned))
+        # print("Hmac:", list(signature))
 
         # Return the full encoded packet (header + encrypted data + HMAC signature)
         return packet_unsigned + signature
@@ -146,11 +150,9 @@ def main():
     encoded_packet = encoder.encode(
         args.channel, args.frame.encode(), args.timestamp)
 
-    with open("../../nigga.bin", "wb") as f:
-        f.write(encoded_packet)
-    print("Repr Packet:", repr(encoded_packet))
-    print("Hex Packet:", encoded_packet.hex())
-    print("Packet Length:", len(encoded_packet))
+    # print("Repr Packet:", repr(encoded_packet))
+    # print("Hex Packet:", encoded_packet.hex())
+    # print("Packet Length:", len(encoded_packet))
 
 
 if __name__ == "__main__":

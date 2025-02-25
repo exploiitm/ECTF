@@ -32,6 +32,9 @@ use board::Board;
 use alloc::format;
 use embedded_alloc::LlffHeap as Heap;
 use sha3::{Digest, };
+
+type HmacSha = Hmac<Sha3_256>;
+
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
 
@@ -104,9 +107,6 @@ fn main() -> ! {
                 }
                 board.delay.delay_ms(2000);
 
-
-
-
             }
             board::host_messaging::Opcode::Decode => {
                 let length = header.length;
@@ -118,26 +118,34 @@ fn main() -> ! {
                 let packet = parse_packet(&frame_data);
                 let mut sub_index = None;
                 board.delay.delay_ms(500);
-                for index in 0..board.subscriptions.size {
-                    if board.subscriptions.subscriptions[index as usize]
-                        .as_ref()
-                        .unwrap()
-                        .channel
-                        == packet.channel_id
-                    {
-                        sub_index = Some(index);
-                        break;
+
+                let key = match packet.channel_id {
+                    0 => {
+                        get_key("K0").unwrap()
+                    }, 
+                    _ => {
+                        for index in 0..board.subscriptions.size {
+                            if board.subscriptions.subscriptions[index as usize]
+                                .as_ref()
+                                .unwrap()
+                                .channel
+                                == packet.channel_id
+                            {
+                                sub_index = Some(index);
+                                break;
+                            }
+                        }
+                        
+                        // host_messaging::send_debug_message(&mut board, &format!("{:?}", sub_index));
+                        // host_messaging::send_debug_message(&mut board, "Found subscription");
+                        
+                        &board
+                            .subscriptions
+                                .subscriptions[sub_index.unwrap() as usize]
+                                    .as_ref().unwrap()
+                                    .kdf.derive(packet.timestamp).unwrap()
                     }
-                }
-                
-                // host_messaging::send_debug_message(&mut board, &format!("{:?}", sub_index));
-                // host_messaging::send_debug_message(&mut board, "Found subscription");
-
-                let debug_header: [u8; 2] = [b'%', b'G'];
-                let key = board.subscriptions.subscriptions[sub_index.unwrap() as usize].as_ref().unwrap().kdf.derive(packet.timestamp).unwrap();
-                
-
-
+                };
 
                 if let Some(rec) = most_recent_timestamp {
                     if packet.timestamp < rec {
@@ -150,8 +158,7 @@ fn main() -> ! {
 
                 // host_messaging::send_debug_message(&mut board, &format!("{:?}", key));
 
-                type HmacSha = Hmac<Sha3_256>;
-                let mut hmac = HmacSha::new_from_slice(&key).unwrap();
+                let mut hmac = HmacSha::new_from_slice(key).unwrap();
 
                 hmac.update(&frame_data[..93]);
                 let result = hmac.finalize().into_bytes();
@@ -181,7 +188,7 @@ fn main() -> ! {
                 let result = &result[0..packet.length as usize];
 
                 host_messaging::write_decoded_packet(&mut board, result); 
-                // TODO write back
+
                 // TODO verify above
             }
             _ => {

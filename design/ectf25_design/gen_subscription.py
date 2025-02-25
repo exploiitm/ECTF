@@ -12,36 +12,33 @@ import argparse
 from loguru import logger
 from pathlib import Path
 
-Bytes64 = Annotated[bytes, 64]
-
 Bytes32 = Annotated[bytes, 32]
-
 
 @dataclass(init=True, repr=True)
 class Cover:
-    nodes: List[[int, Bytes64]]
-    leaves: List[[int, Bytes64]]
+    nodes: List[[int, Bytes32]]
+    leaves: List[[int, Bytes32]]
 
 
-def enc(input: Bytes64, key: Bytes64) -> Bytes32:
+def enc(input: Bytes32, key: Bytes32) -> Bytes32:
     hasher = hashlib.sha3_256()
     hasher.update(key)
     hasher.update(input)
     return hasher.digest()
 
 
-def enc_right(input: Bytes64) -> Bytes64:
+def enc_right(input: Bytes32) -> Bytes32:
     key = struct.pack("<8I", *([0xDEADBEEF] * 8))
     return enc(input, key)
 
 
-def enc_left(input: bytes) -> bytes:
+def enc_left(input: Bytes32) -> Bytes32:
     key = struct.pack("<8I", *([0xC0D3D00D] * 8))
     return enc(input, key)
 
 
 def get_cover_wrapper(
-    master: Bytes64, begin: int, end: int, depth: int
+    master: Bytes32, begin: int, end: int, depth: int
 ) -> Cover:
     if (begin >= 1 << depth) or (end >= 1 << depth):
         raise ValueError(
@@ -106,13 +103,16 @@ def test_cover():
     print("test_cover passed.")
 
 
-def get_cover(master: Bytes64, begin: int, end: int) -> Cover:
+def get_cover(master: Bytes32, begin: int, end: int) -> Cover:
+    
     return get_cover_wrapper(master, begin, end, 64)
 
 
 def gen_subscription(
     secrets: bytes, device_id: int, start: int, end: int, channel: int
 ) -> bytes:
+    assert channel != 0, "Channel 0 (Emergency Broadcast) is implicitly subscribed to."
+
     global_secrets = json.loads(secrets.decode("utf-8"))
     if ("K"+str(channel)) not in global_secrets:
         raise ValueError(
