@@ -131,7 +131,6 @@ generate_clock!(Uart3, Lpgcr, pclkdis, uart3);
 generate_clock!(Wdt0, Gcr, pclkdis1, wdt0);
 generate_clock!(Wdt1, Lpgcr, pclkdis, wdt1);
 
-// TODO: add system, peripheral, and soft resets
 generate_reset!(Adc, Gcr, rst0, adc);
 generate_reset!(Aes, Gcr, rst1, aes);
 // CNN?

@@ -16,15 +16,18 @@ use crate::{Board, host_messaging};
 use sha3::{Digest, Sha3_256};
 
 use crate::Subscription;
-pub fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16], buf: &mut [u8; 64])  {
-    let data= Aes256CbcDec::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))
+pub fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16], buf: &mut [u8; 64]) {
+    let data = Aes256CbcDec::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))
         .decrypt_padded_vec_mut::<NoPadding>(data_enc)
         .unwrap();
     buf.copy_from_slice(&data);
 }
 
 pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 32]) -> Option<Subscription> {
-    host_messaging::send_debug_message(board, &format!("encrypted sub length: {}", encrypted_sub.len()));
+    host_messaging::send_debug_message(
+        board,
+        &format!("encrypted sub length: {}", encrypted_sub.len()),
+    );
     let iv = GenericArray::from_slice(&encrypted_sub[0..16]);
     let ciphertext = &encrypted_sub[16..];
     let mut hasher = Sha3_256::new();
@@ -56,7 +59,13 @@ pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 32]) -> Op
         board,
         &format!("Your momma so fat, le couldn't handle her"),
     );
-    host_messaging::send_debug_message(board, &format!("Length written in sub: {}", u64::from_le_bytes(length_bytes))); //u64::from_le_bytes(length_bytes)
+    host_messaging::send_debug_message(
+        board,
+        &format!(
+            "Length written in sub: {}",
+            u64::from_le_bytes(length_bytes)
+        ),
+    ); //u64::from_le_bytes(length_bytes)
     let key_data = &decrypted_data[32..u64::from_le_bytes(length_bytes) as usize + 8 /* length of the length bytes */];
     let device_id = u32::from_le_bytes(device_id_bytes);
     let channel = u32::from_le_bytes(channel_bytes);
