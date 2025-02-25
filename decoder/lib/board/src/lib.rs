@@ -2,8 +2,9 @@
 
 pub const CHANNEL_ID_SIZE: usize = 4;
 pub const TIMESTAMP_SIZE: usize = 8;
-pub const MAX_NUM_CHANNELS: usize = 8;
+pub const MAX_NUM_CHANNELS: usize = 1;
 
+use cipher::KeyInit;
 use core::array;
 use max7800x_hal::{
     self as hal,
@@ -14,11 +15,11 @@ use max7800x_hal::{
 
 use hal::pac;
 
-use hmac::{Hmac, Mac};
-use sha3::Sha3_256;
+use sha3::{Digest, Sha3_256};
+
 
 extern crate alloc;
-// use alloc::vec;
+use alloc::format;
 
 use segtree_kdf::{self, Key, KeyHasher, MAX_COVER_SIZE};
 //Led Pins Struct
@@ -36,15 +37,15 @@ pub struct Board {
 }
 
 pub struct SHA256Hasher {
-    key_left: Key,
-    key_right: Key,
+    pub key_left: Key,
+    pub key_right: Key,
 }
 
 impl KeyHasher for SHA256Hasher {
     fn new() -> Self {
-        let key_left_base: u32 = 0xdeadbeef;
+        let key_left_base: u32 = 0xDEADBEEF;
         let key_left = key_left_base.to_le_bytes().repeat(8).try_into().unwrap();
-        let key_right_base: u32 = 0xc0ded00d;
+        let key_right_base: u32 = 0xC0D3D00D;
         let key_right = key_right_base.to_le_bytes().repeat(8).try_into().unwrap();
 
         SHA256Hasher {
@@ -55,14 +56,15 @@ impl KeyHasher for SHA256Hasher {
 
     fn hash(&self, data: &Key, direction: bool) -> Key {
         let key = match direction {
-            true => self.key_right,
-            false => self.key_left,
+            true => self.key_left,
+            false => self.key_right,
         };
 
-        let mut mac = Hmac::<Sha3_256>::new_from_slice(&key).unwrap();
+        let mut mac = Sha3_256::new();
+        mac.update(&key);
         mac.update(data);
 
-        mac.finalize().into_bytes().try_into().unwrap()
+        mac.finalize().as_slice().try_into().unwrap()
     }
 }
 
@@ -83,8 +85,7 @@ impl Subscription {
     pub fn new(device_id: u32, channel: u32, start: u64, end: u64, keys: &[u8]) -> Self {
         let num_nodes_bytes = keys[0..8].try_into().unwrap();
         let num_nodes = u64::from_le_bytes(num_nodes_bytes) as usize;
-
-        let keys = &keys[8..].to_vec();
+        let keys = &keys[8..];
 
         let mut cover: [Option<segtree_kdf::Node>; segtree_kdf::MAX_COVER_SIZE] =
             array::from_fn(|_| None);
@@ -296,6 +297,7 @@ fn panic_handler(_info: &PanicInfo) -> ! {
 
         let DEBUG_HEADER: [u8; 2] = [b'%', b'G'];
         console.write_bytes(&DEBUG_HEADER);
+        delay.delay_ms(1000);
         let message = b"board panicked";
         let message_len = message.len() as u16;
         let message_len_bytes = message_len.to_le_bytes();

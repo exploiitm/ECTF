@@ -1,4 +1,4 @@
-target extended-remote :50004
+target extended-remote :50001
 
 # print demangled symbols
 set print asm-demangle on
