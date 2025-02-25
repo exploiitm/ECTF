@@ -43,7 +43,7 @@ fn main() {
     // Set the linker script to the one provided by cortex-m-rt.
     println!("cargo:rustc-link-arg=-Tlink.x");
 
-    let SECRET_FILE = "../../design/ectf25_design/secrets.json";
+    let SECRET_FILE = "../../secrets/secrets.json";
     println!("cargo:rerun-if-changed={}", SECRET_FILE);
     // Loading in secrets.json
     let secrets = fs::read_to_string(SECRET_FILE).expect("Failed to read secrets.json");

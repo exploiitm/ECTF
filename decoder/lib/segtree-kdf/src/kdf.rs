@@ -2,7 +2,7 @@ use crate::key_hasher::*;
 pub use crate::params::*;
 use core::{array, cell::RefCell};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 
 pub struct Node {
     pub id: u64,
@@ -12,7 +12,7 @@ pub struct Node {
 // type Cache = [Option<Node>; TREE_HEIGHT + 1];
 
 pub struct SegtreeKDF<H: KeyHasher> {
-    cover: [[Option<Node>; 2]; TREE_HEIGHT + 1],
+    pub cover: [[Option<Node>; 2]; TREE_HEIGHT + 1],
     // cache: RefCell<Cache>,
     hash: H,
 }

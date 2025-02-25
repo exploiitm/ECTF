@@ -109,10 +109,18 @@ pub fn write_decoded_packet(board: &mut Board, data: &[u8]) {
     board.console.write_bytes(&header.as_bytes());
     if read_ack(board) {
         board.console.write_bytes(data);
+        if read_ack(board) {
+            return;
+        }
+        else {
+            panic!();
+        }
     } else {
         panic!();
     }
+    
 }
+
 
 pub fn send_debug_message(board: &mut Board, message: &str) {
     let length = message.len() as u16;
@@ -170,7 +178,7 @@ pub fn subscription_update(board: &mut Board, header: Header, sub_data: &mut [u8
     }
     board.console.write_bytes(&ACK_PACKET);
 
-    send_debug_message(board, format!("Read all packets").as_str());
+    send_debug_message(board, "Received subscription data");
 }
 
 pub fn succesful_subscription(board: &mut Board) {

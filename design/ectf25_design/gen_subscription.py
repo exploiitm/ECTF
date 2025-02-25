@@ -25,18 +25,18 @@ class Cover:
 
 def enc(input: Bytes64, key: Bytes64) -> Bytes32:
     hasher = hashlib.sha3_256()
-    hasher.update(input)
     hasher.update(key)
+    hasher.update(input)
     return hasher.digest()
 
 
 def enc_right(input: Bytes64) -> Bytes64:
-    key = struct.pack(">8I", *([0xDEADBEEF] * 8))
+    key = struct.pack("<8I", *([0xDEADBEEF] * 8))
     return enc(input, key)
 
 
 def enc_left(input: bytes) -> bytes:
-    key = struct.pack(">8I", *([0xC0D3D00D] * 8))
+    key = struct.pack("<8I", *([0xC0D3D00D] * 8))
     return enc(input, key)
 
 
@@ -137,7 +137,8 @@ def gen_subscription(
     #    "keys": [(key.hex(), index) for key, index in get_cover(Ks, start, end)],
     # }
 
-    keys = get_cover(Ks, start, end)
+    Kchannel = bytes.fromhex(global_secrets["K" + str(channel)])
+    keys = get_cover(Kchannel, start, end)
 
     # Convert device_id and channel to fixed-length bytes (4-byte int)
     device_id_bytes = struct.pack("<I", device_id)
@@ -153,12 +154,10 @@ def gen_subscription(
     key_data = b""
     key_data += struct.pack("<Q", len(keys.nodes))
 
-    key_data += struct.pack("<Q", len(keys.nodes))
     for index, key in keys.nodes:
         key_data += struct.pack("<Q", index)
         key_data += key
 
-    key_data += struct.pack("<Q", len(keys.leaves))
     for index, key in keys.leaves:
         key_data += struct.pack("<Q", index)
         key_data += key
@@ -180,12 +179,15 @@ def gen_subscription(
     iv = get_random_bytes(16)
     cipher = AES.new(K10, AES.MODE_CBC, iv)
     pad_length = AES.block_size - (len(subscription_data) % AES.block_size)
+    print("CHECK THE PAD LENGTH: ", pad_length)
     padded_data = subscription_data + b'\0' * pad_length
     subscription_data_encrypted = cipher.encrypt(padded_data)
     # # we write to sub.bin
     # with open("sub.bin", "wb") as f:
     #     f.write(subscription_data_encrypted)  # Append the subscription data
     print("This is the IV: ", iv.hex().encode())
+    print("CHECK THE TOTAL LENGTH: ", len(
+        iv) + len(subscription_data_encrypted))
     return iv+subscription_data_encrypted  # Returning for verification if needed
 
 
