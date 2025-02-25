@@ -10,6 +10,7 @@ use embedded_io::Write;
 pub use hal::entry;
 pub use hal::pac;
 use hal::pac::adc::limit::W;
+use hmac::{Hmac, Mac};
 use parse_packet::parse_packet;
 use segtree_kdf;
 include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
@@ -133,8 +134,22 @@ fn main() -> ! {
                 }
                 most_recent_timestamp = Some(packet.timestamp);
 
-                let key = subscription.kdf.derive(packet.timestamp).unwrap();
                 // TODO check hmac here
+                let key = subscription.kdf.derive(packet.timestamp).unwrap();
+                type HmacSha = Hmac<Sha3_256>;
+                let mut hmac = HmacSha::new_from_slice(&key).unwrap();
+
+                hmac.update(&frame_data[..93]);
+                let result = hmac.finalize().into_bytes();
+
+                if !result
+                    .iter()
+                    .zip(&frame_data[93..])
+                    .all(|bytes| bytes.0 == bytes.1)
+                {
+                    panic!("Suck my dick")
+                }
+
                 // TODO decrypt
                 // TODO write back
                 // TODO verify above
