@@ -60,9 +60,6 @@ fn main() -> ! {
     board.delay.delay_ms(1000);
     // panic!();
 
-    if let Some(val) = get_key("K1") {
-        write!(board.console, "Key K1: {:?}\r\n", val).unwrap();
-    }
     // let size = size_of::<segtree_kdf::SegtreeKDF::<SHA256Hasher>>();
     // board::host_messaging::send_debug_message(&mut board, &format!("Size of SegtreeKDF: {}", size));
     let mut most_recent_timestamp = None;
@@ -147,9 +144,11 @@ fn main() -> ! {
                     .zip(&frame_data[93..])
                     .all(|bytes| bytes.0 == bytes.1)
                 {
+                    host_messaging::send_debug_message("HMAC FAILED NOW");
                     panic!("Suck my dick")
                 }
 
+                host_messaging::send_debug_message("HMAC PASSED NIGGERS");
                 // TODO decrypt
                 // TODO write back
                 // TODO verify above
