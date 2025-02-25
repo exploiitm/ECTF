@@ -31,7 +31,7 @@ use board::Board;
 
 use alloc::format;
 use embedded_alloc::LlffHeap as Heap;
-use sha3::{Digest, };
+use sha3::Digest;
 
 type HmacSha = Hmac<Sha3_256>;
 
@@ -42,7 +42,6 @@ static HEAP: Heap = Heap::empty();
 const HEAP_SIZE: usize = 1024 * 16;
 static mut HEAP_MEM: [core::mem::MaybeUninit<u8>; HEAP_SIZE] =
     [core::mem::MaybeUninit::uninit(); HEAP_SIZE];
-
 
 #[entry]
 fn main() -> ! {
@@ -70,7 +69,6 @@ fn main() -> ! {
     board.delay.delay_ms(1000);
     // panic!();
 
-
     // let size = size_of::<segtree_kdf::SegtreeKDF::<SHA256Hasher>>();
     // board::host_messaging::send_debug_message(&mut board, &format!("Size of SegtreeKDF: {}", size));
     let mut most_recent_timestamp = None;
@@ -83,7 +81,10 @@ fn main() -> ! {
             board::host_messaging::Opcode::Subscribe => {
                 let mut data = [0u8; 5120];
                 let length = header.length.clone();
-                host_messaging::send_debug_message(&mut board, &format!("Header length: {}", length));
+                host_messaging::send_debug_message(
+                    &mut board,
+                    &format!("Header length: {}", length),
+                );
                 board::host_messaging::subscription_update(
                     &mut board,
                     header,
@@ -98,16 +99,13 @@ fn main() -> ! {
                 ) {
                     board.subscriptions.add_subscription(subscription);
                     host_messaging::succesful_subscription(&mut board);
-
                 } else {
                     board::host_messaging::send_debug_message(
                         &mut board,
                         "Invalid Subscription Received",
                     );
-
                 }
                 board.delay.delay_ms(2000);
-
             }
             board::host_messaging::Opcode::Decode => {
                 let length = header.length;
@@ -121,9 +119,7 @@ fn main() -> ! {
                 board.delay.delay_ms(500);
 
                 let key = match packet.channel_id {
-                    0 => {
-                        get_key("K0").unwrap()
-                    }, 
+                    0 => get_key("K0").unwrap(),
                     _ => {
                         for index in 0..board.subscriptions.size {
                             if board.subscriptions.subscriptions[index as usize]
@@ -136,15 +132,16 @@ fn main() -> ! {
                                 break;
                             }
                         }
-                        
+
                         // host_messaging::send_debug_message(&mut board, &format!("{:?}", sub_index));
                         // host_messaging::send_debug_message(&mut board, "Found subscription");
-                        
-                        &board
-                            .subscriptions
-                                .subscriptions[sub_index.unwrap() as usize]
-                                    .as_ref().unwrap()
-                                    .kdf.derive(packet.timestamp).unwrap()
+
+                        &board.subscriptions.subscriptions[sub_index.unwrap() as usize]
+                            .as_ref()
+                            .unwrap()
+                            .kdf
+                            .derive(packet.timestamp)
+                            .unwrap()
                     }
                 };
 
@@ -164,7 +161,6 @@ fn main() -> ! {
                 hmac.update(&frame_data[..93]);
                 let result = hmac.finalize().into_bytes();
 
-
                 // host_messaging::send_debug_message(&mut board, &format!("here is the unsigned frame nigger, {:?}", &frame_data[0..10]));
                 // host_messaging::send_debug_message(&mut board, &format!("here is the unsigned frame nigger, {:?}", &frame_data[83..93]));
                 // host_messaging::send_debug_message(&mut board, &format!("here is the hmac nigger, {:?}", result));
@@ -178,19 +174,12 @@ fn main() -> ! {
                 }
 
                 // host_messaging::send_debug_message(&mut board, "HMAC PASSED NIGGERS");
-                let mut result: [u8;64] = [0u8; 64];
-                board::decrypt_data::decrypt_data(
-                    &packet.data_enc,
-                    &key,
-                    &packet.iv,
-                    &mut result
-                );
+                let mut result: [u8; 64] = [0u8; 64];
+                board::decrypt_data::decrypt_data(&packet.data_enc, &key, &packet.iv, &mut result);
                 // host_messaging::send_debug_message(&mut board, &format!("Decrypted data: {:?}", result ));
                 let result = &result[0..packet.length as usize];
 
-                host_messaging::write_decoded_packet(&mut board, result); 
-
-                // TODO verify above
+                host_messaging::write_decoded_packet(&mut board, result);
             }
             _ => {
                 panic!()
@@ -199,4 +188,3 @@ fn main() -> ! {
     }
     // panic!();
 }
-
