@@ -4,6 +4,11 @@ pub const CHANNEL_ID_SIZE: usize = 4;
 pub const TIMESTAMP_SIZE: usize = 8;
 pub const MAX_NUM_CHANNELS: usize = 8;
 
+pub const LOOKUP_TABLE_LOCATION: u32 = 0x10032000;
+pub const CHANNEL_PAGE_START: u32 = 0x10034000;
+pub const SAFETY_LOCATION: u32 = 0x10030f88;
+pub const PAGE_SIZE: u32 = 8192;
+
 use cipher::KeyInit;
 use core::arch::asm;
 use core::array;
@@ -17,11 +22,14 @@ use max7800x_hal::{
 use hal::pac;
 
 use sha3::{Digest, Sha3_256};
-
 extern crate alloc;
 use alloc::format;
 
 use segtree_kdf::{self, Key, KeyHasher, MAX_COVER_SIZE};
+
+use alloc::collections::BTreeMap;
+use postcard::{from_bytes, to_allocvec};
+use serde::{Deserialize, Serialize};
 //Led Pins Struct
 struct LedPins {
     led_r: hal::gpio::Pin<2, 0, InputOutput>,
@@ -65,6 +73,20 @@ impl KeyHasher for SHA256Hasher {
         mac.update(data);
 
         mac.finalize().as_slice().try_into().unwrap()
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ChannelFlashMap {
+    pub map: BTreeMap<u32, u32>, // Maps the channel ID to the flash page
+}
+
+impl ChannelFlashMap {
+    pub fn rebuild_from_flash(board: &mut Board) -> Self {
+        // Reconstruction of the channel map from flash
+        board.read_channel_map().unwrap_or(ChannelFlashMap {
+            map: BTreeMap::new(),
+        })
     }
 }
 
@@ -222,20 +244,20 @@ impl Board {
     }
 
     pub fn set_safety_bit(&mut self) -> Result<u32, hal::flc::FlashError> {
-        let addr = 0x10045ff8;
+        let addr = SAFETY_LOCATION;
         let new_value = 0xffffffff; // Only extracting last 6 bits
         self.flc.write_32(addr, new_value)?;
         Ok(new_value)
     }
     pub fn reset_safety_bit(&mut self) -> Result<u32, hal::flc::FlashError> {
-        let addr = 0x10045ff8;
+        let addr = SAFETY_LOCATION;
         let new_value = 0; // Only extracting last 6 bits
         self.flc.write_32(addr, new_value)?;
         Ok(new_value)
     }
 
     pub fn is_safety_bit_set(&mut self) -> bool {
-        let last_32bit_addr = 0x10045ff8;
+        let last_32bit_addr = SAFETY_LOCATION;
         let current_value = self.flc.read_32(last_32bit_addr).unwrap();
         if (current_value as u8) == 0xFF {
             return true;
@@ -243,11 +265,184 @@ impl Board {
             return false;
         }
     }
+    // Write subscription data to flash
+    pub fn write_sub_to_flash(
+        &mut self,
+        address: u32,
+        data: &[u8],
+    ) -> Result<(), hal::flc::FlashError> {
+        let data_length = data.len() as u32; // Get the length of data
+        let max_size = 5120; // Subscription size constraint
 
+        if data_length > max_size {
+            return Err(hal::flc::FlashError::NeedsErase);
+        }
+
+        unsafe {
+            self.flc.erase_page(address)?;
+        }
+
+        self.flc.write_32(address, data_length)?;
+
+        let mut write_addr = address + 4;
+
+        // **Write actual data in 16-byte aligned chunks**
+        for chunk in data.chunks(16) {
+            let mut padded_chunk = [0xFFu8; 16]; // Default erased flash value for bytes
+            padded_chunk[..chunk.len()].copy_from_slice(chunk);
+
+            for (offset, word_bytes) in padded_chunk.chunks(4).enumerate() {
+                let word = u32::from_le_bytes(word_bytes.try_into().unwrap());
+                self.flc.write_32(write_addr + (offset as u32 * 4), word)?;
+            }
+
+            write_addr += 16;
+        }
+
+        Ok(())
+    }
+
+    // Read one subscription from flash
+    pub fn read_sub_from_flash(
+        &mut self,
+        address: u32,
+        buffer: &mut [u8; 5120],
+    ) -> Result<(), hal::flc::FlashError> {
+        // **Read the stored subscription size (first 4 bytes)**
+        let subscription_size = self.flc.read_32(address)? as usize;
+        if subscription_size == 0xFFFFFFFF || subscription_size > 5120 {
+            return Err(hal::flc::FlashError::InvalidAddress);
+        }
+
+        let mut read_addr = address + 4;
+
+        // **Read exactly `subscription_size` bytes into the buffer**
+        for chunk_index in 0..(subscription_size / 16 + 1) {
+            let chunk_start = chunk_index * 16;
+            let chunk_end = (chunk_start + 16).min(subscription_size);
+            let mut chunk = [0u8; 16];
+
+            for (j, word_addr) in (0..4).map(|offset| read_addr + (offset * 4)).enumerate() {
+                let word = self.flc.read_32(word_addr)?;
+                chunk[j * 4..(j + 1) * 4].copy_from_slice(&word.to_le_bytes());
+            }
+
+            read_addr += 16;
+            buffer[chunk_start..chunk_end].copy_from_slice(&chunk[..chunk_end - chunk_start]);
+        }
+
+        buffer[subscription_size..].fill(0); // Constant size byte array is returned
+        // Did that for consistency, does not affect throughput
+
+        Ok(())
+    }
+
+    // Reads the channel mapping from the flash for reconstruction
+    pub fn read_channel_map(&mut self) -> Result<ChannelFlashMap, hal::flc::FlashError> {
+        let dict_addr = LOOKUP_TABLE_LOCATION; // Dictionary stored at this address
+        let page_size = 8192;
+        let mut read_addr = dict_addr;
+        let mut serialized_data = alloc::vec::Vec::new();
+
+        while read_addr < dict_addr + page_size {
+            let mut chunk = [0u8; 16];
+            let mut is_empty = true;
+
+            for (j, word_addr) in (0..4).map(|offset| read_addr + (offset * 4)).enumerate() {
+                let word = self.flc.read_32(word_addr)?;
+                chunk[j * 4..(j + 1) * 4].copy_from_slice(&word.to_le_bytes());
+
+                if word != 0xFFFFFFFF {
+                    is_empty = false;
+                }
+            }
+
+            read_addr += 16;
+            serialized_data.extend_from_slice(&chunk);
+
+            if is_empty {
+                break; // Stop reading if empty space is found
+            }
+        }
+
+        postcard::from_bytes(&serialized_data).or(Ok(ChannelFlashMap {
+            map: BTreeMap::new(),
+        }))
+    }
+
+    // Writes the channel mapping to the flash
+    pub fn write_channel_map(
+        &mut self,
+        channel_map: &ChannelFlashMap,
+    ) -> Result<(), hal::flc::FlashError> {
+        let dict_addr = LOOKUP_TABLE_LOCATION; // TODO:finalise the page/location in the memory 
+        let page_size = 8192;
+
+        let serialized_data =
+            postcard::to_allocvec(channel_map).map_err(|_| hal::flc::FlashError::InvalidAddress)?;
+
+        if serialized_data.len() > page_size {
+            return Err(hal::flc::FlashError::NeedsErase);
+        }
+
+        unsafe {
+            self.flc.erase_page(dict_addr)?;
+        }
+
+        for (i, chunk) in serialized_data.chunks(16).enumerate() {
+            let addr = dict_addr + (i * 16) as u32;
+            let mut padded_chunk = [0xFFu8; 16];
+            padded_chunk[..chunk.len()].copy_from_slice(chunk);
+
+            for (offset, word_bytes) in padded_chunk.chunks(4).enumerate() {
+                let word = u32::from_le_bytes(word_bytes.try_into().unwrap());
+                self.flc.write_32(addr + (offset as u32 * 4), word)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    // Finds and available page for the subscription
+    pub fn find_available_page(&mut self) -> Result<u32, hal::flc::FlashError> {
+        let start_addr = CHANNEL_PAGE_START; // TODO: Choose apt address to accom 10 pages
+        let page_size = 8192;
+        let num_pages = 10;
+
+        for i in 0..num_pages {
+            let page_addr = start_addr + (i * page_size);
+            let word = self.flc.read_32(page_addr)?;
+
+            if word == 0xFFFFFFFF {
+                return Ok(page_addr); // Found an empty page
+            }
+        }
+
+        Err(hal::flc::FlashError::InvalidAddress) // No available pages
+    }
+
+    // Assign a page for the subscription and erase existing one if so
+    pub fn assign_page_for_subscription(
+        &mut self,
+        channel_map: &mut ChannelFlashMap,
+        channel_id: u32,
+        new_page: u32,
+    ) -> Result<(), hal::flc::FlashError> {
+        if let Some(&old_page) = channel_map.map.get(&channel_id) {
+            unsafe {
+                self.flc.erase_page(old_page)?;
+            }
+        }
+
+        channel_map.map.insert(channel_id, new_page);
+        self.write_channel_map(channel_map)?;
+
+        Ok(())
+    }
     pub fn lockdown(&mut self) {
         self.console.write_bytes(b"LOCDOWN INITIATED LMAO NOOB\r\n");
         self.delay.delay_ms(3000);
-        let addr = 0x10045ff8;
+        let addr = SAFETY_LOCATION;
         unsafe { self.flc.erase_page(addr).unwrap() };
 
         self.led_pins.led_r.set_high();
@@ -303,13 +498,29 @@ fn panic_handler(_info: &PanicInfo) -> ! {
         console.write_bytes(message);
         console.flush_tx();
 
-        let addr = 0x10045ff8;
+        console.write_bytes(b"Bit reset :)\r\n");
+        console.flush_tx();
+
+        // Erasing the lookup table and the stored subscriptions
+        unsafe {
+            flc.erase_page(LOOKUP_TABLE_LOCATION).unwrap();
+        }
+        let start_addr = CHANNEL_PAGE_START;
+        for i in 1..10 {
+            let current_addr = start_addr + (i * PAGE_SIZE);
+
+            unsafe {
+                flc.erase_page(current_addr).unwrap();
+            }
+        }
+
+        // Resetting the safety bit
+        let addr = SAFETY_LOCATION;
         let new_value = 0; // Only extracting last 6 bits
         flc.write_32(addr, new_value).unwrap();
         delay.delay_ms(1000);
 
-        console.write_bytes(b"Bit reset :)\r\n");
-        console.flush_tx();
+        pac::SCB::sys_reset();
 
         loop {}
     }

@@ -2,6 +2,9 @@
 #![no_main]
 pub extern crate max7800x_hal as hal;
 
+use crate::alloc::string::ToString;
+use alloc::vec;
+use board::decrypt_data;
 use board::host_messaging;
 use embedded_io::Write;
 pub use hal::entry;
@@ -9,7 +12,6 @@ pub use hal::pac;
 use hmac::{Hmac, Mac};
 use parse_packet::parse_packet;
 use sha3::Sha3_256;
-
 extern crate alloc;
 // use alloc::vec;
 
@@ -20,7 +22,9 @@ include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
 //board.console.write_bytes(b"Hello world\r\n")
 
 use board::Board;
+use board::ChannelFlashMap; // Struct holding flash information
 
+use alloc::collections::BTreeMap; // The channel flash map
 use alloc::format;
 use embedded_alloc::LlffHeap as Heap;
 
@@ -59,6 +63,54 @@ fn main() -> ! {
     }
 
     board.delay.delay_ms(1000);
+    // panic!();
+    // First, load the channel to location mapping dictionary
+    // Next, retrieve data from each of the mapped pages in flash
+    // Finally, process each of those retrieved pages and add subscriptions after getting Ks
+
+    // Reconstructs the channel map if it exists, else is new
+    let mut channel_map = board.read_channel_map().unwrap_or(ChannelFlashMap {
+        map: BTreeMap::new(),
+    });
+
+    // Retrieve all the subscriptions from flash and decrupt them
+    for (&channel_id, &page_addr) in channel_map.map.iter() {
+        let mut data = [0u8; 5120];
+
+        // Read each sub from flash
+        if let Ok(_) = board.read_sub_from_flash(page_addr, &mut data) {
+            host_messaging::send_debug_message(
+                &mut board,
+                &format!(
+                    "Subscription found for Channel {} at 0x{:X}",
+                    channel_id, page_addr
+                ),
+            );
+
+            let key = get_key("Ks").unwrap();
+
+            // Decrypt the subscription and subscribe again to the file
+            if let Some(subscription) =
+                board::decrypt_data::decrypt_sub(&mut board, &mut data, *key, DECODER_ID)
+            {
+                board.subscriptions.add_subscription(subscription);
+                host_messaging::send_debug_message(
+                    &mut board,
+                    &format!("Subscription for Channel {} loaded", channel_id),
+                );
+            } else {
+                host_messaging::send_debug_message(&mut board, "Error decrypting subscription");
+            }
+        } else {
+            host_messaging::send_debug_message(
+                &mut board,
+                &format!("Failed to read subscription for Channel {}", channel_id),
+            );
+        }
+    }
+
+    // TODO: Decide on behavior of this part of the code after panic
+    // Essentially implement the wipe flash methods in panics
 
     let mut most_recent_timestamp = None;
     loop {
@@ -81,15 +133,40 @@ fn main() -> ! {
                     &mut data[0..length as usize],
                 );
                 let key = get_key("Ks").unwrap();
+                // Find a new available page for the subscription update
+                let address = match board.find_available_page() {
+                    Ok(addr) => addr,
+                    Err(_) => {
+                        host_messaging::send_debug_message(&mut board, "No available page found");
+                        continue;
+                    }
+                };
 
-                // TODO: Write to flash
-
+                board.delay.delay_ms(500);
+                // Write the subscription to the assigned page in flash
+                let result = board.write_sub_to_flash(address, &mut data[0..length as usize]);
+                match result {
+                    Ok(_) => {
+                        host_messaging::send_debug_message(
+                            &mut board,
+                            "Subscription written to flash",
+                        );
+                    }
+                    Err(_) => {
+                        host_messaging::send_debug_message(&mut board, "Error writing to flash");
+                    }
+                }
+                // Attempt decryption of the subscription
                 if let Some(subscription) = board::decrypt_data::decrypt_sub(
                     &mut board,
                     &mut data[0..length as usize],
                     *key,
                     DECODER_ID,
                 ) {
+                    let channel_id = subscription.channel;
+
+                    // Rewriting the subscription flash map dictionary
+                    board.assign_page_for_subscription(&mut channel_map, channel_id, address);
                     board.subscriptions.add_subscription(subscription);
                     host_messaging::succesful_subscription(&mut board);
                 } else {
