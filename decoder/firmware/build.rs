@@ -12,6 +12,7 @@
 
 use hex;
 use serde_json;
+use sha3::{Digest, Sha3_256};
 use std::env;
 use std::fs::{self, File};
 use std::io::Write;
@@ -66,8 +67,31 @@ fn main() {
                 let hex_val = hex::decode(val);
                 let bytes = hex_val.unwrap();
                 let array = format!("{:?}", bytes);
+                if key == "K0" {
+                    rust_code.push_str(&format!("\"{}\" => Some(&{}),\n", key, array));
+                } else if key == "Ks" {
+                    // let mut hasher = Sha3_256::new();
+                    // hasher.update(val);
+                    // let hard_device_id = device_id.to_string();
+                    //
+                    // hasher.update(hard_device_id);
+                    // let k10 = hasher.finalize();
+                    let hex_val = hex::decode(val);
+                    let bytes = hex_val.unwrap();
+                    let mut hasher = Sha3_256::new();
+                    hasher.update(&bytes);
 
-                rust_code.push_str(&format!("\"{}\" => Some(&{}),\n", key, array));
+                    let hard_device_id: u32 = if &decoder_id[0..2] == "0x" {
+                        u32::from_str_radix(&decoder_id[2..], 16).unwrap()
+                    } else {
+                        decoder_id.parse().unwrap()
+                    };
+                    let hard_device_id = hard_device_id.to_string();
+                    hasher.update(&hard_device_id);
+                    let k10: [u8; 32] = hasher.finalize().try_into().unwrap();
+                    let array = format!("{:?}", k10);
+                    rust_code.push_str(&format!("\"{}\" => Some(&{}),\n", "Ks", array));
+                }
             }
         }
 
@@ -79,6 +103,8 @@ fn main() {
         }",
     );
     let out_dir = env::var("OUT_DIR").unwrap();
+    let rust_code_2 = rust_code.clone();
 
     fs::write(format!("{}/secrets.rs", out_dir), rust_code).expect("Failed to write secrets.rs");
+    fs::write(format!("{}/debug.rs", out_dir), rust_code_2).expect("Failed to write secrets.rs");
 }

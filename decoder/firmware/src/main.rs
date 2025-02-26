@@ -47,7 +47,7 @@ fn main() -> ! {
     let mut board = Board::new();
     board.delay.delay_ms(500);
     // board.console.write_bytes(b"Board Initialized\r\n");
-
+    //
     // panic!();
     let is_bit_set = board.is_safety_bit_set();
     board.delay.delay_ms(500);
@@ -57,17 +57,19 @@ fn main() -> ! {
     } else {
         board.lockdown();
     }
+
     board.delay.delay_ms(1000);
 
     let mut most_recent_timestamp = None;
     loop {
         let header: board::host_messaging::Header = board::host_messaging::read_header(&mut board);
+
         match header.opcode {
             board::host_messaging::Opcode::List => {
                 board::host_messaging::list_subscriptions(&mut board);
             }
             board::host_messaging::Opcode::Subscribe => {
-                let mut data = [0u8; 5120];
+                let mut data = [0u8; 5160];
                 let length = header.length.clone();
                 host_messaging::send_debug_message(
                     &mut board,
@@ -152,13 +154,15 @@ fn main() -> ! {
                 hmac.update(&frame_data[..93]);
                 let result = hmac.finalize().into_bytes();
 
-                if !result
-                    .iter()
-                    .zip(&frame_data[93..])
-                    .all(|bytes| bytes.0 == bytes.1)
-                {
+                let mut comparison = 0;
+
+                for byte_tuple in result.iter().zip(&frame_data[93..]) {
                     // host_messaging::send_debug_message(&mut board, "HMAC FAILED NOW");
-                    panic!("Suck my dick")
+                    comparison |= byte_tuple.0 ^ byte_tuple.1;
+                }
+
+                if comparison != 0 {
+                    panic!();
                 }
 
                 // host_messaging::send_debug_message(&mut board, "HMAC PASSED NIGGERS");
