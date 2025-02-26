@@ -34,7 +34,7 @@ type HmacSha = Hmac<Sha3_256>;
 static HEAP: Heap = Heap::empty();
 
 // 16KB heap (adjust based on your needs)
-const HEAP_SIZE: usize = 1024 * 16;
+const HEAP_SIZE: usize = 1024 * 24;
 static mut HEAP_MEM: [core::mem::MaybeUninit<u8>; HEAP_SIZE] =
     [core::mem::MaybeUninit::uninit(); HEAP_SIZE];
 
@@ -75,10 +75,10 @@ fn main() -> ! {
 
     // Retrieve all the subscriptions from flash and decrupt them
     for (&channel_id, &page_addr) in channel_map.map.iter() {
-        let mut data = [0u8; 5120];
+        let mut data = [0u8; 5160];
 
         // Read each sub from flash
-        if let Ok(_) = board.read_sub_from_flash(page_addr, &mut data) {
+        if let Ok(length) = board.read_sub_from_flash(page_addr, &mut data) {
             host_messaging::send_debug_message(
                 &mut board,
                 &format!(
@@ -86,12 +86,15 @@ fn main() -> ! {
                     channel_id, page_addr
                 ),
             );
-
             let key = get_key("Ks").unwrap();
 
+            host_messaging::send_debug_message(
+                &mut board,
+                &format!("see key in flash loading {:x?}", key),
+            );
             // Decrypt the subscription and subscribe again to the file
             if let Some(subscription) =
-                board::decrypt_data::decrypt_sub(&mut board, &mut data, *key, DECODER_ID)
+                board::decrypt_data::decrypt_sub(&mut board, &mut data[0..length as usize], *key, DECODER_ID)
             {
                 board.subscriptions.add_subscription(subscription);
                 host_messaging::send_debug_message(

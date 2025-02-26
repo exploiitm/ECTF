@@ -42,7 +42,9 @@ pub fn decrypt_sub(
     host_messaging::send_debug_message(board, "b1");
     host_messaging::send_debug_message(board, &format!("see key and check bro {:x?}", key));
     let k10_new = GenericArray::from_slice(&key);
+    host_messaging::send_debug_message(board, "b1");
     let decryptor = Aes256CbcDec::new(k10_new, iv);
+    host_messaging::send_debug_message(board, "b1");
     let decrypted_data = decryptor
         .decrypt_padded_vec_mut::<NoPadding>(ciphertext)
         .unwrap();

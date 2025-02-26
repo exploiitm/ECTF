@@ -272,7 +272,7 @@ impl Board {
         data: &[u8],
     ) -> Result<(), hal::flc::FlashError> {
         let data_length = data.len() as u32; // Get the length of data
-        let max_size = 5120; // Subscription size constraint
+        let max_size = 5160; // Subscription size constraint
 
         if data_length > max_size {
             return Err(hal::flc::FlashError::NeedsErase);
@@ -306,16 +306,16 @@ impl Board {
     pub fn read_sub_from_flash(
         &mut self,
         address: u32,
-        buffer: &mut [u8; 5120],
-    ) -> Result<(), hal::flc::FlashError> {
+        buffer: &mut [u8; 5160],
+    ) -> Result<u32, hal::flc::FlashError> {
         // **Read the stored subscription size (first 4 bytes)**
         let subscription_size = self.flc.read_32(address)? as usize;
-        if subscription_size == 0xFFFFFFFF || subscription_size > 5120 {
+        if subscription_size == 0xFFFFFFFF || subscription_size > 5160 {
             return Err(hal::flc::FlashError::InvalidAddress);
         }
 
         let mut read_addr = address + 4;
-
+        let length = self.flc.read_32(address).unwrap();
         // **Read exactly `subscription_size` bytes into the buffer**
         for chunk_index in 0..(subscription_size / 16 + 1) {
             let chunk_start = chunk_index * 16;
@@ -334,7 +334,7 @@ impl Board {
         buffer[subscription_size..].fill(0); // Constant size byte array is returned
         // Did that for consistency, does not affect throughput
 
-        Ok(())
+        Ok(length)
     }
 
     // Reads the channel mapping from the flash for reconstruction
