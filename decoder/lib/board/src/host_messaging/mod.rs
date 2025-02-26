@@ -2,10 +2,9 @@ extern crate alloc;
 use core::panic;
 
 use super::Board;
-use crate::{CHANNEL_ID_SIZE, MAX_NUM_CHANNELS, TIMESTAMP_SIZE};
+use crate::{CHANNEL_ID_SIZE, MAX_NUM_CHANNELS, TIMESTAMP_SIZE, parse_packet::FRAME_PACKET_SIZE};
 
 pub const MAGIC: u8 = b'%';
-pub const FRAME_PACKET_SIZE: u8 = 125;
 pub const ACK_PACKET: [u8; 4] = [b'%', b'A', 0x00, 0x00];
 pub const SUCCESFUL_SUBSCRIPTION: [u8; 4] = [b'%', b'S', 0x00, 0x00];
 pub const DEBUG_HEADER: [u8; 2] = [b'%', b'G'];
@@ -109,7 +108,7 @@ pub fn send_debug_message(board: &mut Board, message: &str) {
     board.console.write_bytes(message.as_bytes());
 }
 
-pub fn read_frame_packet(board: &mut Board, header: &Header, data: &mut [u8; 125]) {
+pub fn read_frame_packet(board: &mut Board, header: &Header, data: &mut [u8; FRAME_PACKET_SIZE]) {
     if header.length as usize != data.len() {
         panic!();
     }

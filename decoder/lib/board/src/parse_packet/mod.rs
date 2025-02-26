@@ -1,3 +1,5 @@
+pub const FRAME_PACKET_SIZE: usize = 125;
+
 #[derive(Debug, Clone)]
 pub struct Packet {
     pub timestamp: u64,
@@ -8,7 +10,7 @@ pub struct Packet {
     pub hmac: [u8; 32],
 }
 
-pub fn parse_packet(input: &[u8; 125]) -> Packet {
+pub fn parse_packet(input: &[u8; FRAME_PACKET_SIZE]) -> Packet {
     let mut timestamp_bytes = [0u8; 8];
     let mut channel_id_bytes = [0u8; 4];
     let length;
