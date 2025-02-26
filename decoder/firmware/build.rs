@@ -43,7 +43,8 @@ fn main() {
     // Set the linker script to the one provided by cortex-m-rt.
     println!("cargo:rustc-link-arg=-Tlink.x");
 
-    let SECRET_FILE = "../../secrets/secrets.json";
+    let decoder_id = std::env::var("DECODER_ID").unwrap();
+    let SECRET_FILE = "../../global.secrets";
     println!("cargo:rerun-if-changed={}", SECRET_FILE);
     // Loading in secrets.json
     let secrets = fs::read_to_string(SECRET_FILE).expect("Failed to read secrets.json");
@@ -52,6 +53,7 @@ fn main() {
 
     // Generate Rust code with constants
     let mut rust_code = String::new();
+    rust_code.push_str(&format!("pub const DECODER_ID: u32 = {};", decoder_id));
     rust_code.push_str("// Auto-generated file, do not edit manually!\n");
 
     if let serde_json::Value::Object(map) = json {
@@ -77,7 +79,6 @@ fn main() {
         }",
     );
     let out_dir = env::var("OUT_DIR").unwrap();
-    let rust_code_2 = rust_code.clone();
 
     fs::write(format!("{}/secrets.rs", out_dir), rust_code).expect("Failed to write secrets.rs");
 }

@@ -1,18 +1,11 @@
 #![no_std]
 #![no_main]
 pub extern crate max7800x_hal as hal;
-use core::fmt::write;
 
-use alloc::vec;
-use board::decrypt_data;
 use board::host_messaging;
-use board::host_messaging::send_debug_message;
-use board::SHA256Hasher;
-use board::Subscriptions;
 use embedded_io::Write;
 pub use hal::entry;
 pub use hal::pac;
-use hal::pac::adc::limit::W;
 use hmac::{Hmac, Mac};
 use parse_packet::parse_packet;
 use sha3::Sha3_256;
@@ -20,7 +13,6 @@ use sha3::Sha3_256;
 extern crate alloc;
 // use alloc::vec;
 
-use segtree_kdf::{self, Key, KeyHasher, MAX_COVER_SIZE};
 include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
 // this comment is useless, added by nithin.
 
@@ -31,7 +23,6 @@ use board::Board;
 
 use alloc::format;
 use embedded_alloc::LlffHeap as Heap;
-use sha3::Digest;
 
 type HmacSha = Hmac<Sha3_256>;
 
@@ -45,17 +36,17 @@ static mut HEAP_MEM: [core::mem::MaybeUninit<u8>; HEAP_SIZE] =
 
 #[entry]
 fn main() -> ! {
-    //initialize the board
-
+    //initializing heap
     unsafe {
         HEAP.init(
             core::ptr::addr_of_mut!(HEAP_MEM).cast::<u8>() as usize,
             HEAP_SIZE,
         );
     }
+    //initializing board
     let mut board = Board::new();
     board.delay.delay_ms(500);
-    board.console.write_bytes(b"Board Initialized\r\n");
+    // board.console.write_bytes(b"Board Initialized\r\n");
 
     // panic!();
     let is_bit_set = board.is_safety_bit_set();
@@ -67,10 +58,7 @@ fn main() -> ! {
         board.lockdown();
     }
     board.delay.delay_ms(1000);
-    // panic!();
 
-    // let size = size_of::<segtree_kdf::SegtreeKDF::<SHA256Hasher>>();
-    // board::host_messaging::send_debug_message(&mut board, &format!("Size of SegtreeKDF: {}", size));
     let mut most_recent_timestamp = None;
     loop {
         let header: board::host_messaging::Header = board::host_messaging::read_header(&mut board);
@@ -98,6 +86,7 @@ fn main() -> ! {
                     &mut board,
                     &mut data[0..length as usize],
                     *key,
+                    DECODER_ID,
                 ) {
                     board.subscriptions.add_subscription(subscription);
                     host_messaging::succesful_subscription(&mut board);
