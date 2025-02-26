@@ -1,3 +1,3 @@
 [workspace]
-members = ["firmware", "lib/board", "lib/decrypt_data", "lib/max78000fthr_hal", "lib/parse_packet", "lib/verify_hmac"]
+members = ["firmware", "lib/board", "lib/max78000fthr_hal"]
 resolver = "2"

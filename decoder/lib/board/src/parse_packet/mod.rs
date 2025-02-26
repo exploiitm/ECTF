@@ -1,5 +1,3 @@
-#![no_std]
-
 #[derive(Debug, Clone)]
 pub struct Packet {
     pub timestamp: u64,
@@ -13,7 +11,7 @@ pub struct Packet {
 pub fn parse_packet(input: &[u8; 125]) -> Packet {
     let mut timestamp_bytes = [0u8; 8];
     let mut channel_id_bytes = [0u8; 4];
-    let mut length = 0u8;
+    let length;
     let mut iv = [0u8; 16];
     let mut data_enc = [0u8; 64];
     let mut hmac = [0u8; 32];

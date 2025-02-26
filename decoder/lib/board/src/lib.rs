@@ -1,35 +1,35 @@
 #![no_std]
 
+extern crate alloc;
+use alloc::collections::BTreeMap;
+use core::array;
+use host_messaging::DEBUG_HEADER;
+
+use serde::{Deserialize, Serialize};
+use sha3::{Digest, Sha3_256};
+
+use max7800x_hal::{
+    self as hal,
+    gpio::{Af1, InputOutput},
+    pac::{self, Peripherals, Uart0},
+    uart::BuiltUartPeripheral,
+};
+use segtree_kdf::{self, Key, KeyHasher};
+
+pub mod parse_packet;
+
 pub const CHANNEL_ID_SIZE: usize = 4;
 pub const TIMESTAMP_SIZE: usize = 8;
 pub const MAX_NUM_CHANNELS: usize = 8;
+pub const KEY_LENGTH: usize = 32;
+pub const NODE_SIZE: usize = 8;
 
 pub const LOOKUP_TABLE_LOCATION: u32 = 0x10032000;
 pub const CHANNEL_PAGE_START: u32 = 0x10034000;
 pub const SAFETY_LOCATION: u32 = 0x10030f88;
 pub const PAGE_SIZE: u32 = 8192;
+pub const MAX_SUBSCRIPTION_SIZE: usize = 5160;
 
-use cipher::KeyInit;
-use core::arch::asm;
-use core::array;
-use max7800x_hal::{
-    self as hal,
-    gpio::{Af1, InputOutput},
-    pac::{Peripherals, SCB, Uart0},
-    uart::BuiltUartPeripheral,
-};
-
-use hal::pac;
-
-use sha3::{Digest, Sha3_256};
-extern crate alloc;
-use alloc::format;
-
-use segtree_kdf::{self, Key, KeyHasher, MAX_COVER_SIZE};
-
-use alloc::collections::BTreeMap;
-use postcard::{from_bytes, to_allocvec};
-use serde::{Deserialize, Serialize};
 //Led Pins Struct
 struct LedPins {
     led_r: hal::gpio::Pin<2, 0, InputOutput>,
@@ -104,17 +104,21 @@ pub struct Subscriptions {
 
 impl Subscription {
     pub fn new(channel: u32, start: u64, end: u64, keys: &[u8]) -> Self {
-        let num_nodes_bytes = keys[0..8].try_into().unwrap();
+        let num_nodes_bytes = keys[0..NODE_SIZE].try_into().unwrap();
         let num_nodes = u64::from_le_bytes(num_nodes_bytes) as usize;
-        let keys = &keys[8..];
+        let keys = &keys[NODE_SIZE..];
 
         let mut cover: [Option<segtree_kdf::Node>; segtree_kdf::MAX_COVER_SIZE] =
             array::from_fn(|_| None);
 
         for i in 0..num_nodes {
-            let id_bytes = keys[i * 40..i * 40 + 8].try_into().unwrap();
+            let id_bytes = keys[i * (KEY_LENGTH + TIMESTAMP_SIZE)
+                ..i * (KEY_LENGTH + TIMESTAMP_SIZE) + TIMESTAMP_SIZE]
+                .try_into()
+                .unwrap();
             let id = u64::from_le_bytes(id_bytes);
-            let key_bytes = &keys[i * 40 + 8..i * 40 + 40];
+            let key_bytes = &keys[i * (KEY_LENGTH + TIMESTAMP_SIZE) + TIMESTAMP_SIZE
+                ..(i + 1) * (KEY_LENGTH + TIMESTAMP_SIZE)];
             let node = segtree_kdf::Node {
                 id,
                 key: key_bytes.try_into().unwrap(),
@@ -123,14 +127,16 @@ impl Subscription {
         }
 
         let mut last_layer: [Option<segtree_kdf::Node>; 2] = array::from_fn(|_| None);
-        let num_leaves = keys.len() / 40 - num_nodes;
+        let num_leaves = keys.len() / (KEY_LENGTH + TIMESTAMP_SIZE) - num_nodes;
 
         for i in 0..num_leaves {
-            let id_bytes = keys[(num_nodes + i) * 40..(num_nodes + i) * 40 + 8]
+            let id_bytes = keys[(num_nodes + i) * (KEY_LENGTH + TIMESTAMP_SIZE)
+                ..(num_nodes + i) * (KEY_LENGTH + TIMESTAMP_SIZE) + TIMESTAMP_SIZE]
                 .try_into()
                 .unwrap();
             let id = u64::from_le_bytes(id_bytes);
-            let key_bytes = keys[(num_nodes + i) * 40 + 8..(num_nodes + i) * 40 + 40]
+            let key_bytes = keys[(num_nodes + i) * (KEY_LENGTH + TIMESTAMP_SIZE) + TIMESTAMP_SIZE
+                ..(num_nodes + i + 1) * (KEY_LENGTH + TIMESTAMP_SIZE)]
                 .try_into()
                 .unwrap();
             let node = segtree_kdf::Node { id, key: key_bytes };
@@ -170,7 +176,7 @@ impl Subscriptions {
                 }
             }
         }
-        panic!("It's okay bro, you tried");
+        panic!();
     }
 
     pub fn list_subscriptions(&self, message: &mut [u8]) -> u8 {
@@ -206,15 +212,17 @@ impl Board {
         //Take ownership of the MAX78000 peripherals
         let peripherals: Peripherals = Peripherals::take().unwrap();
         let core = pac::CorePeripherals::take().unwrap();
+
         //constrain the Global Control Register (GCR) Peripheral
         let mut gcr = hal::gcr::Gcr::new(peripherals.gcr, peripherals.lpgcr);
+
         //Initialize the Internap Primary Oscillator (IPO)
         let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
         let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
         let delay = cortex_m::delay::Delay::new(core.SYST, clks.sys_clk.frequency);
         let pins = hal::gpio::Gpio2::new(peripherals.gpio2, &mut gcr.reg).split();
-
         let gpio0_pins = hal::gpio::Gpio0::new(peripherals.gpio0, &mut gcr.reg).split();
+
         // Configure UART to host computer with 115200 8N1 settings
         let rx_pin = gpio0_pins.p0_0.into_af1();
         let tx_pin = gpio0_pins.p0_1.into_af1();
@@ -245,13 +253,13 @@ impl Board {
 
     pub fn set_safety_bit(&mut self) -> Result<u32, hal::flc::FlashError> {
         let addr = SAFETY_LOCATION;
-        let new_value = 0xffffffff; // Only extracting last 6 bits
+        let new_value = 0xffffffff;
         self.flc.write_32(addr, new_value)?;
         Ok(new_value)
     }
     pub fn reset_safety_bit(&mut self) -> Result<u32, hal::flc::FlashError> {
         let addr = SAFETY_LOCATION;
-        let new_value = 0; // Only extracting last 6 bits
+        let new_value = 0;
         self.flc.write_32(addr, new_value)?;
         Ok(new_value)
     }
@@ -259,12 +267,9 @@ impl Board {
     pub fn is_safety_bit_set(&mut self) -> bool {
         let last_32bit_addr = SAFETY_LOCATION;
         let current_value = self.flc.read_32(last_32bit_addr).unwrap();
-        if (current_value as u8) == 0xFF {
-            return true;
-        } else {
-            return false;
-        }
+        (current_value & 0xFF) as u8 > 0
     }
+
     // Write subscription data to flash
     pub fn write_sub_to_flash(
         &mut self,
@@ -272,9 +277,9 @@ impl Board {
         data: &[u8],
     ) -> Result<(), hal::flc::FlashError> {
         let data_length = data.len() as u32; // Get the length of data
-        let max_size = 5160; // Subscription size constraint
+        let max_size = MAX_SUBSCRIPTION_SIZE; // Maximum size of a subscription
 
-        if data_length > max_size {
+        if data_length > max_size as u32 {
             return Err(hal::flc::FlashError::NeedsErase);
         }
 
@@ -286,7 +291,7 @@ impl Board {
 
         let mut write_addr = address + 4;
 
-        // **Write actual data in 16-byte aligned chunks**
+        // Write actual data in 16-byte aligned chunks
         for chunk in data.chunks(16) {
             let mut padded_chunk = [0xFFu8; 16]; // Default erased flash value for bytes
             padded_chunk[..chunk.len()].copy_from_slice(chunk);
@@ -306,11 +311,11 @@ impl Board {
     pub fn read_sub_from_flash(
         &mut self,
         address: u32,
-        buffer: &mut [u8; 5160],
+        buffer: &mut [u8; MAX_SUBSCRIPTION_SIZE],
     ) -> Result<u32, hal::flc::FlashError> {
         // Read the stored subscription size (first 4 bytes)
         let subscription_size = self.flc.read_32(address)?;
-        if subscription_size == 0xFFFFFFFF || subscription_size > 5160 {
+        if subscription_size == 0xFFFFFFFF || subscription_size > MAX_SUBSCRIPTION_SIZE as u32 {
             return Err(hal::flc::FlashError::InvalidAddress);
         }
 
@@ -338,7 +343,7 @@ impl Board {
     // Reads the channel mapping from the flash for reconstruction
     pub fn read_channel_map(&mut self) -> Result<ChannelFlashMap, hal::flc::FlashError> {
         let dict_addr = LOOKUP_TABLE_LOCATION; // Dictionary stored at this address
-        let page_size = 8192;
+        let page_size = PAGE_SIZE;
         let mut read_addr = dict_addr;
         let mut serialized_data = alloc::vec::Vec::new();
 
@@ -374,12 +379,12 @@ impl Board {
         channel_map: &ChannelFlashMap,
     ) -> Result<(), hal::flc::FlashError> {
         let dict_addr = LOOKUP_TABLE_LOCATION; // TODO:finalise the page/location in the memory 
-        let page_size = 8192;
+        let page_size = PAGE_SIZE;
 
         let serialized_data =
             postcard::to_allocvec(channel_map).map_err(|_| hal::flc::FlashError::InvalidAddress)?;
 
-        if serialized_data.len() > page_size {
+        if serialized_data.len() > page_size as usize {
             return Err(hal::flc::FlashError::NeedsErase);
         }
 
@@ -403,14 +408,15 @@ impl Board {
 
     // Finds and available page for the subscription
     pub fn find_available_page(&mut self) -> Result<u32, hal::flc::FlashError> {
-        let start_addr = CHANNEL_PAGE_START; // TODO: Choose apt address to accom 10 pages
-        let page_size = 8192;
+        let start_addr = CHANNEL_PAGE_START;
+        let page_size = PAGE_SIZE;
         let num_pages = 10;
 
         for i in 0..num_pages {
             let page_addr = start_addr + (i * page_size);
             let word = self.flc.read_32(page_addr)?;
 
+            // TODO: Improve this check
             if word == 0xFFFFFFFF {
                 return Ok(page_addr); // Found an empty page
             }
@@ -438,7 +444,6 @@ impl Board {
         Ok(())
     }
     pub fn lockdown(&mut self) {
-        self.console.write_bytes(b"LOCDOWN INITIATED LMAO NOOB\r\n");
         self.delay.delay_ms(3000);
         let addr = SAFETY_LOCATION;
         unsafe { self.flc.erase_page(addr).unwrap() };
@@ -452,74 +457,68 @@ impl Board {
 
 #[panic_handler]
 fn panic_handler(_info: &PanicInfo) -> ! {
+    let peripherals: Peripherals = unsafe { Peripherals::steal() };
+    let core: pac::CorePeripherals = unsafe { pac::CorePeripherals::steal() };
+
+    let mut gcr = hal::gcr::Gcr::new(peripherals.gcr, peripherals.lpgcr);
+    //Initialize the Internap Primary Oscillator (IPO)
+    let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
+    let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, clks.sys_clk.frequency);
+    let pins = hal::gpio::Gpio2::new(peripherals.gpio2, &mut gcr.reg).split();
+
+    let mut led_r = pins.p2_0.into_input_output();
+    let mut led_g = pins.p2_1.into_input_output();
+    let mut led_b = pins.p2_2.into_input_output();
+    led_r.set_power_vddioh();
+    led_g.set_power_vddioh();
+    led_b.set_power_vddioh();
+
+    let gpio0_pins = hal::gpio::Gpio0::new(peripherals.gpio0, &mut gcr.reg).split();
+    // Configure UART to host computer with 115200 8N1 settings
+    let rx_pin = gpio0_pins.p0_0.into_af1();
+    let tx_pin = gpio0_pins.p0_1.into_af1();
+
+    let flc = hal::flc::Flc::new(peripherals.flc, clks.sys_clk);
+
+    //initializing the console
+    let console = hal::uart::UartPeripheral::uart0(peripherals.uart0, &mut gcr.reg, rx_pin, tx_pin)
+        .baud(115200)
+        .clock_pclk(&clks.pclk)
+        .parity(hal::uart::ParityBit::None)
+        .build();
+
+    let debug_header = DEBUG_HEADER;
+    console.write_bytes(&debug_header);
+    delay.delay_ms(1000);
+    let message = b"board panicked";
+    let message_len = message.len() as u16;
+    let message_len_bytes = message_len.to_le_bytes();
+    console.write_bytes(&message_len_bytes);
+    console.write_bytes(message);
+    console.flush_tx();
+
+    console.write_bytes(b"Bit reset :)\r\n");
+    console.flush_tx();
+
+    // Erasing the lookup table and the stored subscriptions
     unsafe {
-        let peripherals: Peripherals = Peripherals::steal();
-        let core: pac::CorePeripherals = pac::CorePeripherals::steal();
-        let mut gcr = hal::gcr::Gcr::new(peripherals.gcr, peripherals.lpgcr);
-        //Initialize the Internap Primary Oscillator (IPO)
-        let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
-        let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
-        let mut delay = cortex_m::delay::Delay::new(core.SYST, clks.sys_clk.frequency);
-        let pins = hal::gpio::Gpio2::new(peripherals.gpio2, &mut gcr.reg).split();
-
-        let mut led_r = pins.p2_0.into_input_output();
-        let mut led_g = pins.p2_1.into_input_output();
-        let mut led_b = pins.p2_2.into_input_output();
-        // Use VDDIOH as the power source for the RGB LED pins (3.0V)
-        // Note: This HAL API may change in the future
-        led_r.set_power_vddioh();
-        led_g.set_power_vddioh();
-        led_b.set_power_vddioh();
-
-        let gpio0_pins = hal::gpio::Gpio0::new(peripherals.gpio0, &mut gcr.reg).split();
-        // Configure UART to host computer with 115200 8N1 settings
-        let rx_pin = gpio0_pins.p0_0.into_af1();
-        let tx_pin = gpio0_pins.p0_1.into_af1();
-
-        let flc = hal::flc::Flc::new(peripherals.flc, clks.sys_clk);
-
-        //initializing the console
-        let console =
-            hal::uart::UartPeripheral::uart0(peripherals.uart0, &mut gcr.reg, rx_pin, tx_pin)
-                .baud(115200)
-                .clock_pclk(&clks.pclk)
-                .parity(hal::uart::ParityBit::None)
-                .build();
-
-        let DEBUG_HEADER: [u8; 2] = [b'%', b'G'];
-        console.write_bytes(&DEBUG_HEADER);
-        delay.delay_ms(1000);
-        let message = b"board panicked";
-        let message_len = message.len() as u16;
-        let message_len_bytes = message_len.to_le_bytes();
-        console.write_bytes(&message_len_bytes);
-        console.write_bytes(message);
-        console.flush_tx();
-
-        console.write_bytes(b"Bit reset :)\r\n");
-        console.flush_tx();
-
-        // Erasing the lookup table and the stored subscriptions
-        unsafe {
-            flc.erase_page(LOOKUP_TABLE_LOCATION).unwrap();
-        }
-        let start_addr = CHANNEL_PAGE_START;
-        for i in 1..10 {
-            let current_addr = start_addr + (i * PAGE_SIZE);
-
-            unsafe {
-                flc.erase_page(current_addr).unwrap();
-            }
-        }
-
-        // Resetting the safety bit
-        let addr = SAFETY_LOCATION;
-        let new_value = 0; // Only extracting last 6 bits
-        flc.write_32(addr, new_value).unwrap();
-        delay.delay_ms(1000);
-
-        pac::SCB::sys_reset();
-
-        loop {}
+        flc.erase_page(LOOKUP_TABLE_LOCATION).unwrap();
     }
+    let start_addr = CHANNEL_PAGE_START;
+    for i in 1..10 {
+        let current_addr = start_addr + (i * PAGE_SIZE);
+
+        unsafe {
+            flc.erase_page(current_addr).unwrap();
+        }
+    }
+
+    // Resetting the safety bit
+    let addr = SAFETY_LOCATION;
+    let new_value = 0;
+    flc.write_32(addr, new_value).unwrap();
+    delay.delay_ms(1000);
+
+    pac::SCB::sys_reset();
 }

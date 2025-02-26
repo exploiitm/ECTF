@@ -22,7 +22,6 @@ linked_list_allocator = "0.10.5"
 embedded-alloc = "0.6.0"
 hashbrown = { version = "0.15.2", default-features = false, features = ["alloc", "default-hasher"] }
 sha3 = { version = "0.10.8", default-features = false }
-parse_packet = {path = "../lib/parse_packet"}
 hmac-sha = "0.6.1"
 hmac = { version = "0.12.1", default-features = false }
 

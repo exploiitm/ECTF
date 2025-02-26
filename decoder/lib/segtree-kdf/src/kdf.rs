@@ -1,6 +1,6 @@
 use crate::key_hasher::*;
 pub use crate::params::*;
-use core::{array, cell::RefCell};
+use core::array;
 
 #[derive(Clone, Debug)]
 
@@ -13,7 +13,6 @@ pub struct Node {
 
 pub struct SegtreeKDF<H: KeyHasher> {
     pub cover: [[Option<Node>; 2]; TREE_HEIGHT + 1],
-    // cache: RefCell<Cache>,
     hash: H,
 }
 
@@ -42,8 +41,6 @@ impl<H: KeyHasher> SegtreeKDF<H> {
 
         Self {
             cover: constructed_cover,
-            // RETARDED NIRANJAN THIS PANICS
-            // cache: RefCell::new(array::from_fn(|_| None)),
             hash: H::new(),
         }
     }
@@ -71,14 +68,6 @@ impl<H: KeyHasher> SegtreeKDF<H> {
     }
 
     pub fn derive(&self, id: u64) -> Option<Key> {
-        // let mut cache = self.cache.try_borrow_mut().unwrap();
-
-        // if let Some(node) = &cache[TREE_HEIGHT] {
-        //     if node.id == id {
-        //         return Some(node.key);
-        //     }
-        // }
-
         for c in &self.cover[TREE_HEIGHT] {
             if let Some(node) = c {
                 if node.id == id {
@@ -88,7 +77,7 @@ impl<H: KeyHasher> SegtreeKDF<H> {
         }
 
         let par_id = (id >> 1) | (1 << 63);
-        let par = self.try_derive(par_id, TREE_HEIGHT - 1 /* , &mut cache */)?;
+        let par = self.try_derive(par_id, TREE_HEIGHT - 1)?;
         let node = Node {
             id,
             key: self.hash.hash(&par, id & 1 == 1),

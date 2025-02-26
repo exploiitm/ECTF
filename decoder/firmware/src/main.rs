@@ -2,23 +2,22 @@
 #![no_main]
 
 extern crate alloc;
-use crate::alloc::{collections::BTreeMap, format, string::ToString, vec};
+use crate::alloc::collections::BTreeMap;
 
+use board::MAX_SUBSCRIPTION_SIZE;
 use embedded_alloc::LlffHeap as Heap;
-use embedded_io::Write;
 use hmac::{Hmac, Mac};
 use sha3::Sha3_256;
 type HmacSha = Hmac<Sha3_256>;
 
 use board::decrypt_data;
 use board::host_messaging;
+use board::parse_packet::parse_packet;
 use board::Board;
 use board::ChannelFlashMap;
 use hal::entry;
 use hal::flc::FlashError;
-use hal::pac;
 use max7800x_hal as hal;
-use parse_packet::parse_packet;
 
 // Include secrets
 include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
@@ -58,24 +57,19 @@ fn main() -> ! {
     });
 
     // Retrieve all the subscriptions from flash and decrupt them
-    for (&channel_id, &page_addr) in channel_map.map.iter() {
-        let mut data = [0u8; 5160];
+    for (&_channel_id, &page_addr) in channel_map.map.iter() {
+        let mut data = [0u8; MAX_SUBSCRIPTION_SIZE];
 
         // Read each sub from flash
         if let Ok(length) = board.read_sub_from_flash(page_addr, &mut data) {
             let key = get_key("Ks").unwrap();
 
             // Decrypt the subscription and subscribe again to the file
-            board::decrypt_data::decrypt_sub(
-                &mut board,
-                &mut data[0..length as usize],
-                *key,
-                DECODER_ID,
-            )
-            .map(|subscription| {
-                board.subscriptions.add_subscription(subscription);
-            })
-            .unwrap();
+            decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
+                .map(|subscription| {
+                    board.subscriptions.add_subscription(subscription);
+                })
+                .unwrap();
         }
     }
 
@@ -112,7 +106,7 @@ fn subscribe(
     board: &mut Board,
     channel_map: &mut ChannelFlashMap,
 ) -> Result<(), FlashError> {
-    let mut data = [0u8; 5160];
+    let mut data = [0u8; MAX_SUBSCRIPTION_SIZE];
     let length = header.length.clone();
     board::host_messaging::subscription_update(board, header, &mut data[0..length as usize]);
 
@@ -127,7 +121,7 @@ fn subscribe(
 
     // Attempt decryption of the subscription
     let key = get_key("Ks").unwrap();
-    board::decrypt_data::decrypt_sub(board, &mut data[0..length as usize], *key, DECODER_ID)
+    decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
         .map(|subscription| {
             let channel_id = subscription.channel;
 
@@ -204,7 +198,7 @@ fn decode(
     }
 
     let mut result: [u8; 64] = [0u8; 64];
-    board::decrypt_data::decrypt_data(&packet.data_enc, &key, &packet.iv, &mut result);
+    decrypt_data::decrypt_data(&packet.data_enc, &key, &packet.iv, &mut result);
     let result = &result[0..packet.length as usize];
     host_messaging::write_decoded_packet(board, result);
 }
