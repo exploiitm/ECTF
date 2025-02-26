@@ -40,7 +40,7 @@ pub fn decrypt_sub(encrypted_sub: &[u8], key: [u8; 32], device_id: u32) -> Optio
     }
 
     if comparison != 0 {
-        panic!();
+        panic!("HMAC failure in decrypt sub");
     }
 
     let length_bytes: [u8; 8] = decrypted_data[0..8].try_into().unwrap();

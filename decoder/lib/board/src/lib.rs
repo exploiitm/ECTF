@@ -176,7 +176,7 @@ impl Subscriptions {
                 }
             }
         }
-        panic!();
+        panic!("No subscription space, more than 8 sent");
     }
 
     pub fn list_subscriptions(&self, message: &mut [u8]) -> u8 {
@@ -456,7 +456,7 @@ impl Board {
 }
 
 #[panic_handler]
-fn panic_handler(_info: &PanicInfo) -> ! {
+fn panic_handler(info: &PanicInfo) -> ! {
     let peripherals: Peripherals = unsafe { Peripherals::steal() };
     let core: pac::CorePeripherals = unsafe { pac::CorePeripherals::steal() };
 
@@ -491,11 +491,12 @@ fn panic_handler(_info: &PanicInfo) -> ! {
     let debug_header = DEBUG_HEADER;
     console.write_bytes(&debug_header);
     delay.delay_ms(1000);
-    let message = b"board panicked";
-    let message_len = message.len() as u16;
-    let message_len_bytes = message_len.to_le_bytes();
+    let message = info.message();
+
+    let message = message.as_str().unwrap_or("Unknown panic");
+    let message_len_bytes = message.len().to_le_bytes();
     console.write_bytes(&message_len_bytes);
-    console.write_bytes(message);
+    console.write_bytes(message.as_bytes());
     console.flush_tx();
 
     console.write_bytes(b"Bit reset :)\r\n");

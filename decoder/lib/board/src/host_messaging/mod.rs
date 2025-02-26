@@ -82,7 +82,7 @@ pub fn read_ack(board: &mut Board) -> bool {
 pub fn write_decoded_packet(board: &mut Board, data: &[u8]) {
     let length = data.len();
     if length > ACK_LENGTH {
-        panic!();
+        panic!("Ack length panic cup");
     }
     let header = Header {
         opcode: Opcode::Decode,
@@ -95,7 +95,7 @@ pub fn write_decoded_packet(board: &mut Board, data: &[u8]) {
             return;
         }
     }
-    panic!();
+    panic!("write decoded packet panic cup");
 }
 
 pub fn send_debug_message(board: &mut Board, message: &str) {
@@ -110,7 +110,7 @@ pub fn send_debug_message(board: &mut Board, message: &str) {
 
 pub fn read_frame_packet(board: &mut Board, header: &Header, data: &mut [u8; FRAME_PACKET_SIZE]) {
     if header.length as usize != data.len() {
-        panic!();
+        panic!("Read frame packet header length cup");
     }
     board.console.write_bytes(&ACK_PACKET);
     for byte in data {
@@ -150,9 +150,8 @@ pub fn succesful_subscription(board: &mut Board) {
     board.console.write_bytes(&SUCCESFUL_SUBSCRIPTION);
     if read_ack(board) {
         return;
-    } else {
-        panic!();
     }
+    panic!("successful subscription panic cup");
 }
 
 pub fn list_subscriptions(board: &mut Board) {
@@ -173,5 +172,5 @@ pub fn list_subscriptions(board: &mut Board) {
             return;
         }
     }
-    panic!();
+    panic!("List subscription panic cup");
 }

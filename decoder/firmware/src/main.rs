@@ -95,7 +95,7 @@ fn main() -> ! {
                 decode(&header, &mut board, &mut most_recent_timestamp)
             }
             _ => {
-                panic!()
+                panic!("Unknown opcode")
             }
         }
     }
@@ -144,7 +144,7 @@ fn decode(
 ) {
     let length = header.length;
     if length != 125 {
-        panic!();
+        panic!("length mismatch in decode");
     }
 
     let mut frame_data = [0u8; 125];
@@ -178,7 +178,7 @@ fn decode(
 
     if let Some(rec) = most_recent_timestamp {
         if packet.timestamp < *rec {
-            panic!();
+            panic!("timestamp reversion in decode");
         }
     }
     *most_recent_timestamp = Some(packet.timestamp);
@@ -194,7 +194,7 @@ fn decode(
     }
 
     if comparison != 0 {
-        panic!();
+        panic!("hmacs failure in decode");
     }
 
     let mut result: [u8; 64] = [0u8; 64];
