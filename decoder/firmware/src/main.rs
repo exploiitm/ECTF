@@ -92,6 +92,8 @@ fn main() -> ! {
                 );
                 let key = get_key("Ks").unwrap();
 
+                // TODO: Write to flash
+
                 if let Some(subscription) = board::decrypt_data::decrypt_sub(
                     &mut board,
                     &mut data[0..length as usize],
@@ -161,9 +163,6 @@ fn main() -> ! {
                 hmac.update(&frame_data[..93]);
                 let result = hmac.finalize().into_bytes();
 
-                // host_messaging::send_debug_message(&mut board, &format!("here is the unsigned frame nigger, {:?}", &frame_data[0..10]));
-                // host_messaging::send_debug_message(&mut board, &format!("here is the unsigned frame nigger, {:?}", &frame_data[83..93]));
-                // host_messaging::send_debug_message(&mut board, &format!("here is the hmac nigger, {:?}", result));
                 if !result
                     .iter()
                     .zip(&frame_data[93..])
