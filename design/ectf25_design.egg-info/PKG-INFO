@@ -1,0 +1,6 @@
+Metadata-Version: 2.2
+Name: ectf25_design
+Version: 1.0.0
+Requires-Python: >=3.11
+Requires-Dist: loguru
+Requires-Dist: pycryptodome

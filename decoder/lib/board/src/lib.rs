@@ -1,5 +1,12 @@
 #![no_std]
 
+pub const CHANNEL_ID_SIZE: usize = 4;
+pub const TIMESTAMP_SIZE: usize = 8;
+pub const MAX_NUM_CHANNELS: usize = 8;
+
+use cipher::KeyInit;
+use core::arch::asm;
+use core::array;
 use max7800x_hal::{
     self as hal,
     gpio::{Af1, InputOutput},
@@ -9,11 +16,12 @@ use max7800x_hal::{
 
 use hal::pac;
 
-use hashbrown::HashMap;
+use sha3::{Digest, Sha3_256};
 
 extern crate alloc;
-use alloc::string::String;
+use alloc::format;
 
+use segtree_kdf::{self, Key, KeyHasher, MAX_COVER_SIZE};
 //Led Pins Struct
 struct LedPins {
     led_r: hal::gpio::Pin<2, 0, InputOutput>,
@@ -25,14 +33,146 @@ pub struct Board {
         BuiltUartPeripheral<Uart0, hal::gpio::Pin<0, 0, Af1>, hal::gpio::Pin<0, 1, Af1>, (), ()>, // flc: hal::flc::Flc,
     pub flc: hal::flc::Flc,
     led_pins: LedPins,
+    pub subscriptions: Subscriptions,
+}
+
+pub struct SHA256Hasher {
+    pub key_left: Key,
+    pub key_right: Key,
+}
+
+impl KeyHasher for SHA256Hasher {
+    fn new() -> Self {
+        let key_left_base: u32 = 0xDEADBEEF;
+        let key_left = key_left_base.to_le_bytes().repeat(8).try_into().unwrap();
+        let key_right_base: u32 = 0xC0D3D00D;
+        let key_right = key_right_base.to_le_bytes().repeat(8).try_into().unwrap();
+
+        SHA256Hasher {
+            key_left,
+            key_right,
+        }
+    }
+
+    fn hash(&self, data: &Key, direction: bool) -> Key {
+        let key = match direction {
+            true => self.key_left,
+            false => self.key_right,
+        };
+
+        let mut mac = Sha3_256::new();
+        mac.update(&key);
+        mac.update(data);
+
+        mac.finalize().as_slice().try_into().unwrap()
+    }
 }
 
 pub struct Subscription {
     device_id: u32,
-    channel: u32,
-    start: u64,
-    end: u64,
-    keys: HashMap<String, [u8; 32]>,
+    pub channel: u32,
+    pub start: u64,
+    pub end: u64,
+    pub kdf: segtree_kdf::SegtreeKDF<SHA256Hasher>,
+}
+
+pub struct Subscriptions {
+    pub size: u8,
+    pub subscriptions: [Option<Subscription>; MAX_NUM_CHANNELS],
+}
+
+impl Subscription {
+    pub fn new(device_id: u32, channel: u32, start: u64, end: u64, keys: &[u8]) -> Self {
+        let num_nodes_bytes = keys[0..8].try_into().unwrap();
+        let num_nodes = u64::from_le_bytes(num_nodes_bytes) as usize;
+        let keys = &keys[8..];
+
+        let mut cover: [Option<segtree_kdf::Node>; segtree_kdf::MAX_COVER_SIZE] =
+            array::from_fn(|_| None);
+
+        for i in 0..num_nodes {
+            let id_bytes = keys[i * 40..i * 40 + 8].try_into().unwrap();
+            let id = u64::from_le_bytes(id_bytes);
+            let key_bytes = &keys[i * 40 + 8..i * 40 + 40];
+            let node = segtree_kdf::Node {
+                id,
+                key: key_bytes.try_into().unwrap(),
+            };
+            cover[i] = Some(node);
+        }
+
+        let mut last_layer: [Option<segtree_kdf::Node>; 2] = array::from_fn(|_| None);
+        let num_leaves = keys.len() / 40 - num_nodes;
+
+        for i in 0..num_leaves {
+            let id_bytes = keys[(num_nodes + i) * 40..(num_nodes + i) * 40 + 8]
+                .try_into()
+                .unwrap();
+            let id = u64::from_le_bytes(id_bytes);
+            let key_bytes = keys[(num_nodes + i) * 40 + 8..(num_nodes + i) * 40 + 40]
+                .try_into()
+                .unwrap();
+            let node = segtree_kdf::Node { id, key: key_bytes };
+            last_layer[i] = Some(node);
+        }
+        let kdf = segtree_kdf::SegtreeKDF::<SHA256Hasher>::new(cover, last_layer);
+
+        Subscription {
+            device_id,
+            channel,
+            start,
+            end,
+            kdf,
+        }
+    }
+}
+
+impl Subscriptions {
+    pub fn new() -> Self {
+        Subscriptions {
+            size: 0,
+            subscriptions: array::from_fn(|_| None),
+        }
+    }
+    pub fn add_subscription(&mut self, sub: Subscription) {
+        for i in 0..MAX_NUM_CHANNELS {
+            match &self.subscriptions[i] {
+                Some(subscription) => {
+                    if subscription.channel == sub.channel {
+                        self.subscriptions[i] = Some(sub);
+                        return;
+                    }
+                }
+                None => {
+                    self.subscriptions[i] = Some(sub);
+                    self.size += 1;
+                    return;
+                }
+            }
+        }
+        panic!("It's okay bro, you tried");
+    }
+
+    pub fn list_subscriptions(&self, message: &mut [u8]) -> u8 {
+        let num_channels = self.size as u32;
+        let num_channels_bytes = num_channels.to_le_bytes();
+        message[0..num_channels_bytes.len()].copy_from_slice(&num_channels_bytes);
+        let mut length = num_channels_bytes.len();
+        for sub in &self.subscriptions[0..num_channels as usize] {
+            if let Some(sub) = sub {
+                let channel_id_bytes = sub.channel.to_le_bytes();
+                message[length..(length + CHANNEL_ID_SIZE)].copy_from_slice(&channel_id_bytes);
+                length += CHANNEL_ID_SIZE;
+                let start_bytes = sub.start.to_le_bytes();
+                message[length..(length + TIMESTAMP_SIZE)].copy_from_slice(&start_bytes);
+                length += TIMESTAMP_SIZE;
+                let end_bytes = sub.end.to_le_bytes();
+                message[length..(length + TIMESTAMP_SIZE)].copy_from_slice(&end_bytes);
+                length += TIMESTAMP_SIZE;
+            }
+        }
+        length as u8
+    }
 }
 
 use core::panic::PanicInfo;
@@ -79,6 +219,7 @@ impl Board {
                     led_r
                 },
             },
+            subscriptions: Subscriptions::new(),
         }
     }
 
@@ -156,6 +297,7 @@ fn panic_handler(_info: &PanicInfo) -> ! {
 
         let DEBUG_HEADER: [u8; 2] = [b'%', b'G'];
         console.write_bytes(&DEBUG_HEADER);
+        delay.delay_ms(1000);
         let message = b"board panicked";
         let message_len = message.len() as u16;
         let message_len_bytes = message_len.to_le_bytes();
@@ -170,20 +312,21 @@ fn panic_handler(_info: &PanicInfo) -> ! {
 
         console.write_bytes(b"Bit reset :)\r\n");
         console.flush_tx();
-        // LED blink loop
-        loop {
-            led_r.set_high();
-            delay.delay_ms(500);
-            led_g.set_high();
-            delay.delay_ms(500);
-            led_b.set_high();
-            delay.delay_ms(500);
-            led_r.set_low();
-            delay.delay_ms(500);
-            led_g.set_low();
-            delay.delay_ms(500);
-            led_b.set_low();
-            delay.delay_ms(500);
-        }
+
+        // TODO: Check this shit
+        asm!(
+            "1337:", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b"
+        );
+
+        loop {}
     }
 }

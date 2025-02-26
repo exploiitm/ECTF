@@ -56,7 +56,7 @@ fn main() {
 
     if let serde_json::Value::Object(map) = json {
         rust_code.push_str(
-            "fn get_key(key: &str) -> Option<&'static [u8; 64]> {
+            "fn get_key(key: &str) -> Option<&'static [u8; 32]> {
             match key { \n",
         );
         for (key, value) in map {
@@ -76,7 +76,6 @@ fn main() {
             }
         }",
     );
-
     let out_dir = env::var("OUT_DIR").unwrap();
     let rust_code_2 = rust_code.clone();
 

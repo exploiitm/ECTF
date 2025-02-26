@@ -12,36 +12,33 @@ import argparse
 from loguru import logger
 from pathlib import Path
 
-Bytes64 = Annotated[bytes, 64]
-
 Bytes32 = Annotated[bytes, 32]
-
 
 @dataclass(init=True, repr=True)
 class Cover:
-    nodes: List[[int, Bytes64]]
-    leaves: List[[int, Bytes64]]
+    nodes: List[[int, Bytes32]]
+    leaves: List[[int, Bytes32]]
 
 
-def enc(input: Bytes64, key: Bytes64) -> Bytes32:
+def enc(input: Bytes32, key: Bytes32) -> Bytes32:
     hasher = hashlib.sha3_256()
-    hasher.update(input)
     hasher.update(key)
+    hasher.update(input)
     return hasher.digest()
 
 
-def enc_right(input: Bytes64) -> Bytes64:
-    key = struct.pack(">8I", *([0xDEADBEEF] * 8))
+def enc_right(input: Bytes32) -> Bytes32:
+    key = struct.pack("<8I", *([0xDEADBEEF] * 8))
     return enc(input, key)
 
 
-def enc_left(input: bytes) -> bytes:
-    key = struct.pack(">8I", *([0xC0D3D00D] * 8))
+def enc_left(input: Bytes32) -> Bytes32:
+    key = struct.pack("<8I", *([0xC0D3D00D] * 8))
     return enc(input, key)
 
 
 def get_cover_wrapper(
-    master: Bytes64, begin: int, end: int, depth: int
+    master: Bytes32, begin: int, end: int, depth: int
 ) -> Cover:
     if (begin >= 1 << depth) or (end >= 1 << depth):
         raise ValueError(
@@ -106,13 +103,16 @@ def test_cover():
     print("test_cover passed.")
 
 
-def get_cover(master: Bytes64, begin: int, end: int) -> Cover:
+def get_cover(master: Bytes32, begin: int, end: int) -> Cover:
+    
     return get_cover_wrapper(master, begin, end, 64)
 
 
 def gen_subscription(
     secrets: bytes, device_id: int, start: int, end: int, channel: int
 ) -> bytes:
+    assert channel != 0, "Channel 0 (Emergency Broadcast) is implicitly subscribed to."
+
     global_secrets = json.loads(secrets.decode("utf-8"))
     if ("K"+str(channel)) not in global_secrets:
         raise ValueError(
@@ -137,7 +137,8 @@ def gen_subscription(
     #    "keys": [(key.hex(), index) for key, index in get_cover(Ks, start, end)],
     # }
 
-    keys = get_cover(Ks, start, end)
+    Kchannel = bytes.fromhex(global_secrets["K" + str(channel)])
+    keys = get_cover(Kchannel, start, end)
 
     # Convert device_id and channel to fixed-length bytes (4-byte int)
     device_id_bytes = struct.pack("<I", device_id)
@@ -151,17 +152,14 @@ def gen_subscription(
 
     print("cover: ", keys)
     key_data = b""
-
     key_data += struct.pack("<Q", len(keys.nodes))
+
     for index, key in keys.nodes:
         key_data += struct.pack("<Q", index)
-        key_data += b"\x00"
         key_data += key
 
-    key_data += struct.pack("<Q", len(keys.leaves))
     for index, key in keys.leaves:
         key_data += struct.pack("<Q", index)
-        key_data += b"\x00"
         key_data += key
 
     # Pack keys (assuming key is 16-byte and index is 4-byte int)
@@ -172,6 +170,7 @@ def gen_subscription(
         channel_bytes + start_bytes + end_bytes + key_data
 
     length = len(subscription_data)
+    print("CHECK THE LENGTH: ", length)
     length_bytes = struct.pack("<Q", length)
     subscription_data = length_bytes + subscription_data
     print(subscription_data)
@@ -179,12 +178,16 @@ def gen_subscription(
     # Encode subscription data
     iv = get_random_bytes(16)
     cipher = AES.new(K10, AES.MODE_CBC, iv)
-    padded_data = pad(subscription_data, AES.block_size)
+    pad_length = AES.block_size - (len(subscription_data) % AES.block_size)
+    print("CHECK THE PAD LENGTH: ", pad_length)
+    padded_data = subscription_data + b'\0' * pad_length
     subscription_data_encrypted = cipher.encrypt(padded_data)
     # # we write to sub.bin
     # with open("sub.bin", "wb") as f:
     #     f.write(subscription_data_encrypted)  # Append the subscription data
     print("This is the IV: ", iv.hex().encode())
+    print("CHECK THE TOTAL LENGTH: ", len(
+        iv) + len(subscription_data_encrypted))
     return iv+subscription_data_encrypted  # Returning for verification if needed
 
 

@@ -17,10 +17,7 @@ pub struct GcrRegisters {
 pub struct Gcr {
     pub reg: GcrRegisters,
     pub osc_guards: clocks::OscillatorGuards,
-    pub sys_clk: clocks::SystemClockConfig<
-        clocks::InternalSecondaryOscillator,
-        clocks::DivUnknown
-    >,
+    pub sys_clk: clocks::SystemClockConfig<clocks::InternalSecondaryOscillator, clocks::DivUnknown>,
 }
 
 impl Gcr {
@@ -101,7 +98,6 @@ macro_rules! generate_reset {
     };
 }
 
-
 generate_clock!(Adc, Gcr, pclkdis0, adc);
 generate_clock!(Aes, Gcr, pclkdis1, aes);
 // CNN?
@@ -135,17 +131,16 @@ generate_clock!(Uart3, Lpgcr, pclkdis, uart3);
 generate_clock!(Wdt0, Gcr, pclkdis1, wdt0);
 generate_clock!(Wdt1, Lpgcr, pclkdis, wdt1);
 
-// TODO: add system, peripheral, and soft resets
 generate_reset!(Adc, Gcr, rst0, adc);
 generate_reset!(Aes, Gcr, rst1, aes);
 // CNN?
 // CPU1 (RISC-V core)?
 generate_reset!(Crc, Gcr, rst1, crc);
 generate_reset!(Dma, Gcr, rst0, dma);
-generate_reset!(Dvs, Gcr, rst1, dvs);       // Note: Dynamic Voltage Scaling Controller does not have its own peripheral clock
-generate_reset!(Gpio0, Gcr, rst0, gpio0);   // Note: Peripheral resets may not affect the GPIO peripherals
-generate_reset!(Gpio1, Gcr, rst0, gpio1);   // Note: Peripheral resets may not affect the GPIO peripherals
-generate_reset!(Gpio2, Lpgcr, rst, gpio2);  // Note: Peripheral resets may not affect the GPIO peripherals
+generate_reset!(Dvs, Gcr, rst1, dvs); // Note: Dynamic Voltage Scaling Controller does not have its own peripheral clock
+generate_reset!(Gpio0, Gcr, rst0, gpio0); // Note: Peripheral resets may not affect the GPIO peripherals
+generate_reset!(Gpio1, Gcr, rst0, gpio1); // Note: Peripheral resets may not affect the GPIO peripherals
+generate_reset!(Gpio2, Lpgcr, rst, gpio2); // Note: Peripheral resets may not affect the GPIO peripherals
 generate_reset!(I2c0, Gcr, rst0, i2c0);
 generate_reset!(I2c1, Gcr, rst1, i2c1);
 generate_reset!(I2c2, Gcr, rst1, i2c2);

@@ -1,23 +1,24 @@
 use crate::key_hasher::*;
-use crate::params::*;
+pub use crate::params::*;
 use core::{array, cell::RefCell};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
+
 pub struct Node {
     pub id: u64,
     pub key: Key,
 }
 
-type Cache = [Option<Node>; TREE_HEIGHT + 1];
+// type Cache = [Option<Node>; TREE_HEIGHT + 1];
 
 pub struct SegtreeKDF<H: KeyHasher> {
-    cover: [[Option<Node>; 2]; TREE_HEIGHT + 1],
-    cache: RefCell<Cache>,
+    pub cover: [[Option<Node>; 2]; TREE_HEIGHT + 1],
+    // cache: RefCell<Cache>,
     hash: H,
 }
 
 impl<H: KeyHasher> SegtreeKDF<H> {
-    pub fn new(cover: &[Option<Node>; MAX_COVER_SIZE], last_layer: &[Option<Node>; 2]) -> Self {
+    pub fn new(cover: [Option<Node>; MAX_COVER_SIZE], last_layer: [Option<Node>; 2]) -> Self {
         let mut constructed_cover: [[Option<Node>; 2]; TREE_HEIGHT + 1] =
             array::from_fn(|_| [None, None]);
 
@@ -34,19 +35,20 @@ impl<H: KeyHasher> SegtreeKDF<H> {
                 } else {
                     0
                 };
-                constructed_cover[bit_count - 1][insert_at] = Some(node.clone());
+                constructed_cover[bit_count - 1][insert_at] = Some(node);
             }
         }
-        constructed_cover[TREE_HEIGHT] = last_layer.clone();
+        constructed_cover[TREE_HEIGHT] = last_layer;
 
         Self {
             cover: constructed_cover,
-            cache: RefCell::new(array::from_fn(|_| None)),
+            // RETARDED NIRANJAN THIS PANICS
+            // cache: RefCell::new(array::from_fn(|_| None)),
             hash: H::new(),
         }
     }
 
-    fn try_derive(&self, id: u64, level: usize, cache: &mut Cache) -> Option<Key> {
+    fn try_derive(&self, id: u64, level: usize /* , cache: &mut Cache */) -> Option<Key> {
         for c in &self.cover[level] {
             if let Some(node) = c {
                 if node.id == id {
@@ -59,23 +61,23 @@ impl<H: KeyHasher> SegtreeKDF<H> {
             return None;
         }
 
-        let par_key = self.try_derive(id >> 1, level - 1, cache)?;
+        let par_key = self.try_derive(id >> 1, level - 1 /* , cache */)?;
         let node = Node {
             id,
             key: self.hash.hash(&par_key, id & 1 == 1),
         };
-        cache[level] = Some(node.clone());
+        // cache[level] = Some(node.clone());
         Some(node.key)
     }
 
     pub fn derive(&self, id: u64) -> Option<Key> {
-        let mut cache = self.cache.try_borrow_mut().unwrap();
+        // let mut cache = self.cache.try_borrow_mut().unwrap();
 
-        if let Some(node) = &cache[TREE_HEIGHT] {
-            if node.id == id {
-                return Some(node.key);
-            }
-        }
+        // if let Some(node) = &cache[TREE_HEIGHT] {
+        //     if node.id == id {
+        //         return Some(node.key);
+        //     }
+        // }
 
         for c in &self.cover[TREE_HEIGHT] {
             if let Some(node) = c {
@@ -86,12 +88,12 @@ impl<H: KeyHasher> SegtreeKDF<H> {
         }
 
         let par_id = (id >> 1) | (1 << 63);
-        let par = self.try_derive(par_id, TREE_HEIGHT - 1, &mut cache)?;
+        let par = self.try_derive(par_id, TREE_HEIGHT - 1 /* , &mut cache */)?;
         let node = Node {
             id,
             key: self.hash.hash(&par, id & 1 == 1),
         };
-        cache[TREE_HEIGHT] = Some(node.clone());
+        // cache[TREE_HEIGHT] = Some(node.clone());
         Some(node.key)
     }
 }

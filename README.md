@@ -1,4 +1,4 @@
-# Dumbass PLSSS read 
+# PLSSS read 
 ## Decoder
 All decoder code is inside 'decoder' folder
 

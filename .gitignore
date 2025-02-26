@@ -18,3 +18,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.bin
+decoder/Cargo.lock
+design/**/secrets.json
+design/build/
+
+tools/
+test.json
