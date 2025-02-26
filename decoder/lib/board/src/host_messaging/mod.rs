@@ -144,7 +144,7 @@ pub fn send_debug_message(board: &mut Board, message: &str) {
 //     return data;
 // }
 
-pub fn read_frame_packet(board: &mut Board, header: Header, data: &mut [u8; 125]) {
+pub fn read_frame_packet(board: &mut Board, header: &Header, data: &mut [u8; 125]) {
     if header.length as usize != data.len() {
         panic!();
     }
@@ -154,7 +154,7 @@ pub fn read_frame_packet(board: &mut Board, header: Header, data: &mut [u8; 125]
     }
     board.console.write_bytes(&ACK_PACKET);
 }
-pub fn subscription_update(board: &mut Board, header: Header, sub_data: &mut [u8]) {
+pub fn subscription_update(board: &mut Board, header: &Header, sub_data: &mut [u8]) {
     board.console.write_bytes(&ACK_PACKET);
     let length = header.length;
     let num_packets: usize = length.div_ceil(256) as usize;

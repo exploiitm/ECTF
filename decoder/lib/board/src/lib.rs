@@ -308,18 +308,17 @@ impl Board {
         address: u32,
         buffer: &mut [u8; 5160],
     ) -> Result<u32, hal::flc::FlashError> {
-        // **Read the stored subscription size (first 4 bytes)**
-        let subscription_size = self.flc.read_32(address)? as usize;
+        // Read the stored subscription size (first 4 bytes)
+        let subscription_size = self.flc.read_32(address)?;
         if subscription_size == 0xFFFFFFFF || subscription_size > 5160 {
             return Err(hal::flc::FlashError::InvalidAddress);
         }
 
         let mut read_addr = address + 4;
-        let length = self.flc.read_32(address).unwrap();
-        // **Read exactly `subscription_size` bytes into the buffer**
-        for chunk_index in 0..(subscription_size / 16 + 1) {
+        // Read exactly `subscription_size` bytes into the buffer
+        for chunk_index in 0..(subscription_size as usize / 16 + 1) {
             let chunk_start = chunk_index * 16;
-            let chunk_end = (chunk_start + 16).min(subscription_size);
+            let chunk_end = (chunk_start + 16).min(subscription_size as usize);
             let mut chunk = [0u8; 16];
 
             for (j, word_addr) in (0..4).map(|offset| read_addr + (offset * 4)).enumerate() {
@@ -331,10 +330,9 @@ impl Board {
             buffer[chunk_start..chunk_end].copy_from_slice(&chunk[..chunk_end - chunk_start]);
         }
 
-        buffer[subscription_size..].fill(0); // Constant size byte array is returned
-        // Did that for consistency, does not affect throughput
+        buffer[subscription_size as usize..].fill(0);
 
-        Ok(length)
+        Ok(subscription_size)
     }
 
     // Reads the channel mapping from the flash for reconstruction
