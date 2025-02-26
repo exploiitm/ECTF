@@ -5,6 +5,7 @@ pub const TIMESTAMP_SIZE: usize = 8;
 pub const MAX_NUM_CHANNELS: usize = 8;
 
 use cipher::KeyInit;
+use core::arch::asm;
 use core::array;
 use max7800x_hal::{
     self as hal,
@@ -16,7 +17,6 @@ use max7800x_hal::{
 use hal::pac;
 
 use sha3::{Digest, Sha3_256};
-
 
 extern crate alloc;
 use alloc::format;
@@ -312,6 +312,24 @@ fn panic_handler(_info: &PanicInfo) -> ! {
 
         console.write_bytes(b"Bit reset :)\r\n");
         console.flush_tx();
+
+        // TODO: Check this shit
+        asm!(
+            "1337:", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
+            "b 1337b"
+        );
+
+        //
+        //
+
         // LED blink loop
         loop {
             led_r.set_high();
