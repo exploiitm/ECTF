@@ -62,14 +62,14 @@ fn main() -> ! {
 
         // Read each sub from flash
         if let Ok(length) = board.read_sub_from_flash(page_addr, &mut data) {
-            let key = get_key("Ks").unwrap();
+            let key = get_key("Ks").expect("Fetching Ks in main for channel from flash failed");
 
             // Decrypt the subscription and subscribe again to the file
             decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
                 .map(|subscription| {
                     board.subscriptions.add_subscription(subscription);
                 })
-                .unwrap();
+                .expect("couldn't decrypt stored subscription lmao");
         }
     }
 
@@ -117,10 +117,10 @@ fn subscribe(
     // Write the subscription to the assigned page in flash
     board
         .write_sub_to_flash(address, &mut data[0..length as usize])
-        .unwrap();
+        .expect("Failed to write to flash");
 
     // Attempt decryption of the subscription
-    let key = get_key("Ks").unwrap();
+    let key = get_key("Ks").expect("Ks fetch for subscribe failed");
     decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
         .map(|subscription| {
             let channel_id = subscription.channel;
@@ -128,11 +128,11 @@ fn subscribe(
             // Rewriting the subscription flash map dictionary
             board
                 .assign_page_for_subscription(channel_map, channel_id, address)
-                .unwrap();
+                .expect("page assignment failed");
             board.subscriptions.add_subscription(subscription);
             host_messaging::succesful_subscription(board);
         })
-        .unwrap();
+        .expect("Whole of decrypt sub itself failed");
     board.delay.delay_ms(2000);
     Ok(())
 }
@@ -154,12 +154,12 @@ fn decode(
     board.delay.delay_ms(500);
 
     let key = if packet.channel_id == 0 {
-        get_key("K0").unwrap()
+        get_key("K0").expect("Fetching K0 failed")
     } else {
         for index in 0..board.subscriptions.size {
             if board.subscriptions.subscriptions[index as usize]
                 .as_ref()
-                .unwrap()
+                .expect("internal error, check subscriptions array")
                 .channel
                 == packet.channel_id
             {
@@ -168,12 +168,13 @@ fn decode(
             }
         }
 
-        &board.subscriptions.subscriptions[sub_index.unwrap() as usize]
+        &board.subscriptions.subscriptions
+            [sub_index.expect("should ideally be impossible but yeah") as usize]
             .as_ref()
-            .unwrap()
+            .expect("again, should be impossible")
             .kdf
             .derive(packet.timestamp)
-            .unwrap()
+            .expect("Key derivation failed")
     };
 
     if let Some(rec) = most_recent_timestamp {
@@ -183,7 +184,7 @@ fn decode(
     }
     *most_recent_timestamp = Some(packet.timestamp);
 
-    let mut hmac = HmacSha::new_from_slice(key).unwrap();
+    let mut hmac = HmacSha::new_from_slice(key).expect("can't create HMAC from key");
     hmac.update(&frame_data[..93]);
     let result = hmac.finalize().into_bytes();
 

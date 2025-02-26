@@ -11,7 +11,7 @@ use crate::Subscription;
 pub fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16], buf: &mut [u8; 64]) {
     let data = Aes256CbcDec::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))
         .decrypt_padded_vec_mut::<NoPadding>(data_enc)
-        .unwrap();
+        .expect("Data decryption failed");
     buf.copy_from_slice(&data);
 }
 
@@ -23,11 +23,11 @@ pub fn decrypt_sub(encrypted_sub: &[u8], key: [u8; 32], device_id: u32) -> Optio
     let decryptor = Aes256CbcDec::new(k10_new, iv);
     let decrypted_data = decryptor
         .decrypt_padded_vec_mut::<NoPadding>(ciphertext)
-        .unwrap();
+        .expect("Data decryption failed in decrypt sub bro");
 
     let hmac_received = &encrypted_sub[(encrypted_sub.len() - 32)..];
 
-    let mut hmac = HmacSha::new_from_slice(&key).unwrap();
+    let mut hmac = HmacSha::new_from_slice(&key).expect("HMac from Sha failed lil bro");
 
     hmac.update(&encrypted_sub[..(encrypted_sub.len() - 32)]);
     let result = hmac.finalize();

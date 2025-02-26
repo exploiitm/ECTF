@@ -52,9 +52,17 @@ pub struct SHA256Hasher {
 impl KeyHasher for SHA256Hasher {
     fn new() -> Self {
         let key_left_base: u32 = 0xDEADBEEF;
-        let key_left = key_left_base.to_le_bytes().repeat(8).try_into().unwrap();
+        let key_left = key_left_base
+            .to_le_bytes()
+            .repeat(8)
+            .try_into()
+            .expect("Left key into array failed in KeyHasher::new");
         let key_right_base: u32 = 0xC0D3D00D;
-        let key_right = key_right_base.to_le_bytes().repeat(8).try_into().unwrap();
+        let key_right = key_right_base
+            .to_le_bytes()
+            .repeat(8)
+            .try_into()
+            .expect("Right key into array failed in KeyHasher::new");
 
         SHA256Hasher {
             key_left,
@@ -72,7 +80,10 @@ impl KeyHasher for SHA256Hasher {
         mac.update(&key);
         mac.update(data);
 
-        mac.finalize().as_slice().try_into().unwrap()
+        mac.finalize()
+            .as_slice()
+            .try_into()
+            .expect("mac finalization failed")
     }
 }
 
@@ -104,7 +115,9 @@ pub struct Subscriptions {
 
 impl Subscription {
     pub fn new(channel: u32, start: u64, end: u64, keys: &[u8]) -> Self {
-        let num_nodes_bytes = keys[0..NODE_SIZE].try_into().unwrap();
+        let num_nodes_bytes = keys[0..NODE_SIZE]
+            .try_into()
+            .expect("keys.try_into failed in Subscription::new");
         let num_nodes = u64::from_le_bytes(num_nodes_bytes) as usize;
         let keys = &keys[NODE_SIZE..];
 
@@ -115,13 +128,15 @@ impl Subscription {
             let id_bytes = keys[i * (KEY_LENGTH + TIMESTAMP_SIZE)
                 ..i * (KEY_LENGTH + TIMESTAMP_SIZE) + TIMESTAMP_SIZE]
                 .try_into()
-                .unwrap();
+                .expect("id_bytes from keys failed for a particular iteration");
             let id = u64::from_le_bytes(id_bytes);
             let key_bytes = &keys[i * (KEY_LENGTH + TIMESTAMP_SIZE) + TIMESTAMP_SIZE
                 ..(i + 1) * (KEY_LENGTH + TIMESTAMP_SIZE)];
             let node = segtree_kdf::Node {
                 id,
-                key: key_bytes.try_into().unwrap(),
+                key: key_bytes
+                    .try_into()
+                    .expect("Key bytes to key failed in a particular iteration"),
             };
             cover[i] = Some(node);
         }
@@ -133,12 +148,12 @@ impl Subscription {
             let id_bytes = keys[(num_nodes + i) * (KEY_LENGTH + TIMESTAMP_SIZE)
                 ..(num_nodes + i) * (KEY_LENGTH + TIMESTAMP_SIZE) + TIMESTAMP_SIZE]
                 .try_into()
-                .unwrap();
+                .expect("Leaf ID died");
             let id = u64::from_le_bytes(id_bytes);
             let key_bytes = keys[(num_nodes + i) * (KEY_LENGTH + TIMESTAMP_SIZE) + TIMESTAMP_SIZE
                 ..(num_nodes + i + 1) * (KEY_LENGTH + TIMESTAMP_SIZE)]
                 .try_into()
-                .unwrap();
+                .expect("Leaf key died");
             let node = segtree_kdf::Node { id, key: key_bytes };
             last_layer[i] = Some(node);
         }
@@ -266,7 +281,10 @@ impl Board {
 
     pub fn is_safety_bit_set(&mut self) -> bool {
         let last_32bit_addr = SAFETY_LOCATION;
-        let current_value = self.flc.read_32(last_32bit_addr).unwrap();
+        let current_value = self
+            .flc
+            .read_32(last_32bit_addr)
+            .expect("Weren't able to read safety bit. welp");
         (current_value & 0xFF) as u8 > 0
     }
 
@@ -297,7 +315,11 @@ impl Board {
             padded_chunk[..chunk.len()].copy_from_slice(chunk);
 
             for (offset, word_bytes) in padded_chunk.chunks(4).enumerate() {
-                let word = u32::from_le_bytes(word_bytes.try_into().unwrap());
+                let word = u32::from_le_bytes(
+                    word_bytes
+                        .try_into()
+                        .expect("word from 4 bytes in writing failed"),
+                );
                 self.flc.write_32(write_addr + (offset as u32 * 4), word)?;
             }
 
@@ -398,7 +420,11 @@ impl Board {
             padded_chunk[..chunk.len()].copy_from_slice(chunk);
 
             for (offset, word_bytes) in padded_chunk.chunks(4).enumerate() {
-                let word = u32::from_le_bytes(word_bytes.try_into().unwrap());
+                let word = u32::from_le_bytes(
+                    word_bytes
+                        .try_into()
+                        .expect("serialization failed in writing channel map"),
+                );
                 self.flc.write_32(addr + (offset as u32 * 4), word)?;
             }
         }
@@ -446,7 +472,11 @@ impl Board {
     pub fn lockdown(&mut self) {
         self.delay.delay_ms(3000);
         let addr = SAFETY_LOCATION;
-        unsafe { self.flc.erase_page(addr).unwrap() };
+        unsafe {
+            self.flc
+                .erase_page(addr)
+                .expect("Weren't able to erase page")
+        };
 
         self.led_pins.led_r.set_high();
         self.delay.delay_ms(3000);
