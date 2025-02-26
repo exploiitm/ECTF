@@ -72,11 +72,15 @@ dependencies = [
 name = "board"
 version = "0.1.0"
 dependencies = [
+ "aes",
+ "cbc",
+ "cipher",
  "cortex-m",
  "embedded-io",
  "hashbrown",
  "heapless",
  "max7800x-hal",
+ "sha3",
 ]
 
 [[package]]
@@ -198,7 +202,6 @@ dependencies = [
 name = "ectf"
 version = "0.0.0"
 dependencies = [
- "aes",
  "alloc-cortex-m",
  "board",
  "cortex-m-rt",
@@ -305,6 +308,12 @@ dependencies = [
  "hash32",
  "stable_deref_trait",
 ]
+
+[[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hmac"
