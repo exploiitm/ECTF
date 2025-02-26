@@ -15,3 +15,5 @@ cbc = { version = "0.1.2", default-features = false, features = ["block-padding"
 cipher = { version = "0.4.4", default-features = false }
 sha3 = { version = "0.10.8", default-features = false }
 hmac = { version = "0.12.1", default-features = false }
+serde = { version = "1.0.218", default-features = false, features = ["derive"]}
+postcard = { version = "1.1.1", default-features = false, features = ["alloc"]}
