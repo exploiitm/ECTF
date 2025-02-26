@@ -4,6 +4,10 @@ pub const CHANNEL_ID_SIZE: usize = 4;
 pub const TIMESTAMP_SIZE: usize = 8;
 pub const MAX_NUM_CHANNELS: usize = 8;
 
+pub const LOOKUP_TABLE_LOCATION: u32 = 0x10032000;
+pub const CHANNEL_PAGE_START: u32 = 0x10034000;
+pub const SAFETY_LOCATION: u32 = 0x10030f88;
+
 use cipher::KeyInit;
 use core::arch::asm;
 use core::array;
@@ -241,20 +245,20 @@ impl Board {
     }
 
     pub fn set_safety_bit(&mut self) -> Result<u32, hal::flc::FlashError> {
-        let addr = 0x10045ff8;
+        let addr = SAFETY_LOCATION;
         let new_value = 0xffffffff; // Only extracting last 6 bits
         self.flc.write_32(addr, new_value)?;
         Ok(new_value)
     }
     pub fn reset_safety_bit(&mut self) -> Result<u32, hal::flc::FlashError> {
-        let addr = 0x10045ff8;
+        let addr = SAFETY_LOCATION;
         let new_value = 0; // Only extracting last 6 bits
         self.flc.write_32(addr, new_value)?;
         Ok(new_value)
     }
 
     pub fn is_safety_bit_set(&mut self) -> bool {
-        let last_32bit_addr = 0x10045ff8;
+        let last_32bit_addr = SAFETY_LOCATION;
         let current_value = self.flc.read_32(last_32bit_addr).unwrap();
         if (current_value as u8) == 0xFF {
             return true;
@@ -336,7 +340,7 @@ impl Board {
 
     // Reads the channel mapping from the flash for reconstruction
     pub fn read_channel_map(&mut self) -> Result<ChannelFlashMap, hal::flc::FlashError> {
-        let dict_addr = 0x10040000; // Dictionary stored at this address
+        let dict_addr = LOOKUP_TABLE_LOCATION; // Dictionary stored at this address
         let page_size = 8192;
         let mut read_addr = dict_addr;
         let mut serialized_data = alloc::vec::Vec::new();
@@ -372,7 +376,7 @@ impl Board {
         &mut self,
         channel_map: &ChannelFlashMap,
     ) -> Result<(), hal::flc::FlashError> {
-        let dict_addr = 0x10040000; // TODO:finalise the page/location in the memory 
+        let dict_addr = LOOKUP_TABLE_LOCATION; // TODO:finalise the page/location in the memory 
         let page_size = 8192;
 
         let serialized_data =
@@ -402,7 +406,7 @@ impl Board {
 
     // Finds and available page for the subscription
     pub fn find_available_page(&mut self) -> Result<u32, hal::flc::FlashError> {
-        let start_addr = 0x10042000; // TODO: Choose apt address to accom 10 pages
+        let start_addr = CHANNEL_PAGE_START; // TODO: Choose apt address to accom 10 pages
         let page_size = 8192;
         let num_pages = 10;
 
@@ -436,11 +440,10 @@ impl Board {
 
         Ok(())
     }
-
     pub fn lockdown(&mut self) {
         self.console.write_bytes(b"LOCDOWN INITIATED LMAO NOOB\r\n");
         self.delay.delay_ms(3000);
-        let addr = 0x10045ff8;
+        let addr = SAFETY_LOCATION;
         unsafe { self.flc.erase_page(addr).unwrap() };
 
         self.led_pins.led_r.set_high();
@@ -496,7 +499,7 @@ fn panic_handler(_info: &PanicInfo) -> ! {
         console.write_bytes(message);
         console.flush_tx();
 
-        let addr = 0x10045ff8;
+        let addr = SAFETY_LOCATION;
         let new_value = 0; // Only extracting last 6 bits
         flc.write_32(addr, new_value).unwrap();
         delay.delay_ms(1000);

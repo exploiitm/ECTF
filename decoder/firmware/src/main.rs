@@ -3,6 +3,7 @@
 pub extern crate max7800x_hal as hal;
 use core::fmt::write;
 
+use crate::alloc::string::ToString;
 use alloc::vec;
 use board::decrypt_data;
 use board::host_messaging;
@@ -16,7 +17,6 @@ use hal::pac::adc::limit::W;
 use hmac::{Hmac, Mac};
 use parse_packet::parse_packet;
 use sha3::Sha3_256;
-
 extern crate alloc;
 // use alloc::vec;
 
@@ -140,7 +140,6 @@ fn main() -> ! {
                     &mut data[0..length as usize],
                 );
                 let key = get_key("Ks").unwrap();
-
                 // Find a new available page for the subscription update
                 let address = match board.find_available_page() {
                     Ok(addr) => addr,
@@ -150,6 +149,7 @@ fn main() -> ! {
                     }
                 };
 
+                board.delay.delay_ms(500);
                 // Write the subscription to the assigned page in flash
                 let result = board.write_sub_to_flash(address, &mut data[0..length as usize]);
                 match result {

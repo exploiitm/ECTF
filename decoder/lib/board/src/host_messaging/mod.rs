@@ -111,16 +111,13 @@ pub fn write_decoded_packet(board: &mut Board, data: &[u8]) {
         board.console.write_bytes(data);
         if read_ack(board) {
             return;
-        }
-        else {
+        } else {
             panic!();
         }
     } else {
         panic!();
     }
-    
 }
-
 
 pub fn send_debug_message(board: &mut Board, message: &str) {
     let length = message.len() as u16;
@@ -172,7 +169,14 @@ pub fn subscription_update(board: &mut Board, header: Header, sub_data: &mut [u8
     }
 
     //getting last packet
-    for i in 0..(length as usize % 256) {
+    let mut last_packet_size = 0;
+    if length % 256 == 0 {
+        last_packet_size = 256;
+    } else {
+        last_packet_size = length % 256;
+    }
+
+    for i in 0..(last_packet_size as usize) {
         let byte = board.console.read_byte();
         sub_data[(num_packets - 1) * 256 + i] = byte;
     }
