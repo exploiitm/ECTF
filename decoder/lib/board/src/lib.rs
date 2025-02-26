@@ -7,6 +7,7 @@ pub const MAX_NUM_CHANNELS: usize = 8;
 pub const LOOKUP_TABLE_LOCATION: u32 = 0x10032000;
 pub const CHANNEL_PAGE_START: u32 = 0x10034000;
 pub const SAFETY_LOCATION: u32 = 0x10030f88;
+pub const PAGE_SIZE: u32 = 8192;
 
 use cipher::KeyInit;
 use core::arch::asm;
@@ -499,13 +500,29 @@ fn panic_handler(_info: &PanicInfo) -> ! {
         console.write_bytes(message);
         console.flush_tx();
 
+        console.write_bytes(b"Bit reset :)\r\n");
+        console.flush_tx();
+
+        // Erasing the lookup table and the stored subscriptions
+        unsafe {
+            flc.erase_page(LOOKUP_TABLE_LOCATION).unwrap();
+        }
+        let start_addr = CHANNEL_PAGE_START;
+        for i in 1..10 {
+            let current_addr = start_addr + (i * PAGE_SIZE);
+
+            unsafe {
+                flc.erase_page(current_addr).unwrap();
+            }
+        }
+
+        // Resetting the safety bit
         let addr = SAFETY_LOCATION;
         let new_value = 0; // Only extracting last 6 bits
         flc.write_32(addr, new_value).unwrap();
         delay.delay_ms(1000);
 
-        console.write_bytes(b"Bit reset :)\r\n");
-        console.flush_tx();
+        pac::SCB::sys_reset();
 
         // TODO: Check this shit
         asm!(
