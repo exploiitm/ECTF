@@ -1,4 +1,19 @@
-target extended-remote :50001
+#!/bin/zsh
+
+cfg="openocd.cfg"
+gdb="openocd.gdb"
+
+cat << EOF > "$cfg"
+source [ find /home/ectf2025/MaximSDK/Tools/OpenOCD/scripts/interface/cmsis-dap.cfg ]
+source [find target/max78000.cfg]
+adapter serial 0423170217becac900000000000000000000000097969906
+gdb_port 50007
+tcl_port 50008
+telnet_port 50009
+EOF
+
+cat << EOF > "$gdb"
+target extended-remote :50007
 
 # print demangled symbols
 set print asm-demangle on
@@ -27,3 +42,4 @@ load
 
 # start the process but immediately halt the processor
 stepi
+EOF
