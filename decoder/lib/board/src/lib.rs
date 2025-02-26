@@ -327,23 +327,6 @@ fn panic_handler(_info: &PanicInfo) -> ! {
             "b 1337b"
         );
 
-        //
-        //
-
-        // LED blink loop
-        loop {
-            led_r.set_high();
-            delay.delay_ms(500);
-            led_g.set_high();
-            delay.delay_ms(500);
-            led_b.set_high();
-            delay.delay_ms(500);
-            led_r.set_low();
-            delay.delay_ms(500);
-            led_g.set_low();
-            delay.delay_ms(500);
-            led_b.set_low();
-            delay.delay_ms(500);
-        }
+        loop {}
     }
 }
