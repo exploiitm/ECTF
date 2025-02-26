@@ -90,7 +90,7 @@ fn main() -> ! {
 
             // Decrypt the subscription and subscribe again to the file
             if let Some(subscription) =
-                board::decrypt_data::decrypt_sub(&mut board, &mut data, *key)
+                board::decrypt_data::decrypt_sub(&mut board, &mut data, *key, DECODER_ID)
             {
                 board.subscriptions.add_subscription(subscription);
                 host_messaging::send_debug_message(
