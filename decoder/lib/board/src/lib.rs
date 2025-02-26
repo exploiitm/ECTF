@@ -15,7 +15,7 @@ use core::array;
 use max7800x_hal::{
     self as hal,
     gpio::{Af1, InputOutput},
-    pac::{Peripherals, Uart0},
+    pac::{Peripherals, SCB, Uart0},
     uart::BuiltUartPeripheral,
 };
 
@@ -91,7 +91,6 @@ impl ChannelFlashMap {
 }
 
 pub struct Subscription {
-    device_id: u32,
     pub channel: u32,
     pub start: u64,
     pub end: u64,
@@ -104,7 +103,7 @@ pub struct Subscriptions {
 }
 
 impl Subscription {
-    pub fn new(device_id: u32, channel: u32, start: u64, end: u64, keys: &[u8]) -> Self {
+    pub fn new(channel: u32, start: u64, end: u64, keys: &[u8]) -> Self {
         let num_nodes_bytes = keys[0..8].try_into().unwrap();
         let num_nodes = u64::from_le_bytes(num_nodes_bytes) as usize;
         let keys = &keys[8..];
@@ -140,7 +139,6 @@ impl Subscription {
         let kdf = segtree_kdf::SegtreeKDF::<SHA256Hasher>::new(cover, last_layer);
 
         Subscription {
-            device_id,
             channel,
             start,
             end,
@@ -523,20 +521,6 @@ fn panic_handler(_info: &PanicInfo) -> ! {
         delay.delay_ms(1000);
 
         pac::SCB::sys_reset();
-
-        // TODO: Check this shit
-        asm!(
-            "1337:", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
-            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
-            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
-            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
-            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
-            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
-            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
-            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
-            "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b", "b 1337b",
-            "b 1337b"
-        );
 
         loop {}
     }

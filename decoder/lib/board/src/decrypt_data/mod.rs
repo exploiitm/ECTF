@@ -23,7 +23,12 @@ pub fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16], buf: &mu
     buf.copy_from_slice(&data);
 }
 
-pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 32]) -> Option<Subscription> {
+pub fn decrypt_sub(
+    board: &mut Board,
+    encrypted_sub: &[u8],
+    key: [u8; 32],
+    device_id: u32,
+) -> Option<Subscription> {
     host_messaging::send_debug_message(
         board,
         &format!("encrypted sub length: {}", encrypted_sub.len()),
@@ -32,12 +37,13 @@ pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 32]) -> Op
     let ciphertext = &encrypted_sub[16..];
     let mut hasher = Sha3_256::new();
     hasher.update(key);
-    let hard_device_id: u32 = 0xdeadbeef;
-    let hard_device_id = "3735928559";
+    // let hard_device_id: u32 = 0xdeadbeef;
+    // let hard_device_id = "3735928559";
     // TODO: CHANGE THIS
     // let hard_device_id = "3735928559";
     // TODO: CHANGE THIS
     // let hard_device_id = hard_device_id.to_string();
+    let hard_device_id = device_id.to_string();
 
     hasher.update(hard_device_id);
     let k10 = hasher.finalize();
@@ -67,18 +73,23 @@ pub fn decrypt_sub(board: &mut Board, encrypted_sub: &[u8], key: [u8; 32]) -> Op
         ),
     ); //u64::from_le_bytes(length_bytes)
     let key_data = &decrypted_data[32..u64::from_le_bytes(length_bytes) as usize + 8 /* length of the length bytes */];
-    let device_id = u32::from_le_bytes(device_id_bytes);
+    let device_id_received = u32::from_le_bytes(device_id_bytes);
     let channel = u32::from_le_bytes(channel_bytes);
     let start = u64::from_le_bytes(start_bytes);
     let end = u64::from_le_bytes(end_bytes);
 
-    if device_id != 0xdeadbeef {
+    host_messaging::send_debug_message(
+        board,
+        &format!("device id received is {:x}", device_id_received),
+    );
+    host_messaging::send_debug_message(board, &format!("device id inherent  is {:x}", device_id));
+    if device_id != device_id_received {
         host_messaging::send_debug_message(board, &format!("device id does not match"));
         return None;
     }
 
     host_messaging::send_debug_message(board, &format!("device id {:x?}", &decrypted_data[0..10]));
-    let subscription = Subscription::new(device_id, channel, start, end, key_data);
+    let subscription = Subscription::new(channel, start, end, key_data);
     host_messaging::send_debug_message(board, "created subs obj.");
     Some(subscription)
 }
