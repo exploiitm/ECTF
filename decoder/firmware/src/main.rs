@@ -153,6 +153,13 @@ fn decode(
     let mut sub_index = None;
     // board.delay.delay_ms(50);
 
+    if let Some(rec) = most_recent_timestamp {
+        if packet.timestamp < *rec {
+            panic!("timestamp reversion in decode");
+        }
+    }
+    *most_recent_timestamp = Some(packet.timestamp);
+
     let key = if packet.channel_id == 0 {
         get_key("K0").expect("Fetching K0 failed")
     } else {
@@ -168,21 +175,19 @@ fn decode(
             }
         }
 
-        &board.subscriptions.subscriptions
+        let sub = &board.subscriptions.subscriptions
             [sub_index.expect("should ideally be impossible but yeah") as usize]
             .as_ref()
             .expect("again, should be impossible")
-            .kdf
-            .derive(packet.timestamp)
-            .expect("Key derivation failed")
-    };
-
-    if let Some(rec) = most_recent_timestamp {
-        if packet.timestamp < *rec {
-            panic!("timestamp reversion in decode");
+            
+        if packet.timestamp < sub.start || packet.timestamp > sub.end{
+            host_messaging::send_error_message("Timestamp out of bounds.");
+            return Err("Timestamp out of bounds.");
         }
-    }
-    *most_recent_timestamp = Some(packet.timestamp);
+
+
+        sub.kdf.derive(packet.timestamp).expect("Key derivation failed")
+    };
 
     let mut hmac = HmacSha::new_from_slice(key).expect("can't create HMAC from key");
     hmac.update(&frame_data[..93]);

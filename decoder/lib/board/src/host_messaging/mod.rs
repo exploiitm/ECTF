@@ -8,6 +8,7 @@ pub const MAGIC: u8 = b'%';
 pub const ACK_PACKET: [u8; 4] = [b'%', b'A', 0x00, 0x00];
 pub const SUCCESFUL_SUBSCRIPTION: [u8; 4] = [b'%', b'S', 0x00, 0x00];
 pub const DEBUG_HEADER: [u8; 2] = [b'%', b'G'];
+pub const ERROR_MSG: [u8; 4] = [b'%', b'E', 0x00, 0x00];
 pub const ACK_LENGTH: usize = 256;
 
 pub enum Opcode {
@@ -106,6 +107,27 @@ pub fn send_debug_message(board: &mut Board, message: &str) {
     };
     board.console.write_bytes(&header.as_bytes());
     board.console.write_bytes(message.as_bytes());
+}
+
+pub fn send_error_message(board: &mut Board, message: &str) {
+    let length = message.len() as u16;
+
+    // BRo you dont need that much length.
+    if length > 256 {
+        panic!("Message too large");
+    }
+
+    let header = Header {
+        opcode: Opcode::Error,
+        length,
+    };
+    board.console.write_bytes(&header.as_bytes());
+    if read_ack(board) {
+        board.console.write_bytes(message);
+        if read_ack(board) {
+            return;
+        }
+    }
 }
 
 pub fn read_frame_packet(board: &mut Board, header: &Header, data: &mut [u8; FRAME_PACKET_SIZE]) {
