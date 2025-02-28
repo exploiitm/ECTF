@@ -42,15 +42,15 @@ fn main() -> ! {
 
     //initializing board
     let mut board = Board::new();
-    board.delay.delay_ms(500);
+    board.delay.delay_ms(50);
 
     let lockdown_bit = board.is_safety_bit_set();
-    board.delay.delay_ms(500);
+    board.delay.delay_ms(50);
 
     if !lockdown_bit {
         board.lockdown();
     }
-    board.delay.delay_ms(1000);
+    board.delay.delay_ms(50);
 
     let mut channel_map = board.read_channel_map().unwrap_or(ChannelFlashMap {
         map: BTreeMap::new(),
@@ -112,7 +112,7 @@ fn subscribe(
 
     // Find a new available page for the subscription update
     let address = board.find_available_page()?;
-    board.delay.delay_ms(500);
+    board.delay.delay_ms(50);
 
     // Write the subscription to the assigned page in flash
     board
@@ -133,7 +133,7 @@ fn subscribe(
             host_messaging::succesful_subscription(board);
         })
         .expect("Whole of decrypt sub itself failed");
-    board.delay.delay_ms(2000);
+    // board.delay.delay_ms(20);
     Ok(())
 }
 
@@ -151,7 +151,7 @@ fn decode(
     board::host_messaging::read_frame_packet(board, header, &mut frame_data);
     let packet = parse_packet(&frame_data);
     let mut sub_index = None;
-    board.delay.delay_ms(500);
+    // board.delay.delay_ms(50);
 
     let key = if packet.channel_id == 0 {
         get_key("K0").expect("Fetching K0 failed")
