@@ -123,7 +123,7 @@ pub fn send_error_message(board: &mut Board, message: &str) {
     };
     board.console.write_bytes(&header.as_bytes());
     if read_ack(board) {
-        board.console.write_bytes(message);
+        board.console.write_bytes(message.as_bytes());
         if read_ack(board) {
             return;
         }

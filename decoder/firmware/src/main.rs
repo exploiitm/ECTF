@@ -92,7 +92,10 @@ fn main() -> ! {
             }
 
             board::host_messaging::Opcode::Decode => {
-                decode(&header, &mut board, &mut most_recent_timestamp)
+                match decode(&header, &mut board, &mut most_recent_timestamp) {
+                    Ok(_) => {}
+                    Err(_) => continue,
+                }
             }
             _ => {
                 panic!("Unknown opcode")
@@ -137,11 +140,11 @@ fn subscribe(
     Ok(())
 }
 
-fn decode(
+fn decode (
     header: &host_messaging::Header,
     board: &mut Board,
     most_recent_timestamp: &mut Option<u64>,
-) {
+) -> Result<(), FlashError> {
     let length = header.length;
     if length != 125 {
         panic!("length mismatch in decode");
@@ -175,20 +178,24 @@ fn decode(
             }
         }
 
+        if sub_index.is_none() {
+            host_messaging::send_error_message(board, "No subscription found.");
+            return Err(FlashError::InvalidAddress);
+        }
+
         let sub = &board.subscriptions.subscriptions
             [sub_index.expect("should ideally be impossible but yeah") as usize]
             .as_ref()
-            .expect("again, should be impossible")
+            .expect("again, should be impossible");
             
         if packet.timestamp < sub.start || packet.timestamp > sub.end{
-            host_messaging::send_error_message("Timestamp out of bounds.");
-            return Err("Timestamp out of bounds.");
+            host_messaging::send_error_message(board, "Timestamp out of bounds.");
+            return Err(FlashError::InvalidAddress);
         }
 
 
-        sub.kdf.derive(packet.timestamp).expect("Key derivation failed")
+        &sub.kdf.derive(packet.timestamp).expect("Key derivation failed")
     };
-
     let mut hmac = HmacSha::new_from_slice(key).expect("can't create HMAC from key");
     hmac.update(&frame_data[..93]);
     let result = hmac.finalize().into_bytes();
@@ -207,4 +214,5 @@ fn decode(
     decrypt_data::decrypt_data(&packet.data_enc, &key, &packet.iv, &mut result);
     let result = &result[0..packet.length as usize];
     host_messaging::write_decoded_packet(board, result);
+    Ok(())
 }
