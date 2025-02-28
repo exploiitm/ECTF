@@ -138,6 +138,7 @@ pub fn read_frame_packet(board: &mut Board, header: &Header, data: &mut [u8; FRA
     for byte in data {
         *byte = board.console.read_byte();
     }
+    send_debug_message(board, "gonna send final ack inside read_frame_packet");
     board.console.write_bytes(&ACK_PACKET);
 }
 pub fn subscription_update(board: &mut Board, header: &Header, sub_data: &mut [u8]) {

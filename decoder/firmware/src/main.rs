@@ -152,16 +152,24 @@ fn decode (
 
     let mut frame_data = [0u8; 125];
     board::host_messaging::read_frame_packet(board, header, &mut frame_data);
+    host_messaging::send_debug_message(board, "gonna enter parse packet\r\n");
+
     let packet = parse_packet(&frame_data);
+
+    host_messaging::send_debug_message(board, "finished parse_packet\r\n");
     let mut sub_index = None;
     // board.delay.delay_ms(50);
 
+    host_messaging::send_debug_message(board, &alloc::format!("timestamp: {}, most recent: {:?}", packet.timestamp, most_recent_timestamp));
+
     if let Some(rec) = most_recent_timestamp {
-        if packet.timestamp < *rec {
+        if packet.timestamp <= *rec {
             panic!("timestamp reversion in decode");
         }
     }
     *most_recent_timestamp = Some(packet.timestamp);
+
+    host_messaging::send_debug_message(board, "after most_recent_timestamp");
 
     let key = if packet.channel_id == 0 {
         get_key("K0").expect("Fetching K0 failed")
@@ -178,10 +186,15 @@ fn decode (
             }
         }
 
+        host_messaging::send_debug_message(board, "after sub_index");
+        host_messaging::send_debug_message(board, &alloc::format!("after sub_index check, sub_index = {:?}", sub_index));
+
         if sub_index.is_none() {
             host_messaging::send_error_message(board, "No subscription found.");
             return Err(FlashError::InvalidAddress);
         }
+
+        host_messaging::send_debug_message(board, &alloc::format!("after sub_index check, sub_index = {:?}", sub_index));
 
         let sub = &board.subscriptions.subscriptions
             [sub_index.expect("should ideally be impossible but yeah") as usize]
@@ -196,7 +209,9 @@ fn decode (
 
         &sub.kdf.derive(packet.timestamp).expect("Key derivation failed")
     };
+    host_messaging::send_debug_message(board, "before hmac");
     let mut hmac = HmacSha::new_from_slice(key).expect("can't create HMAC from key");
+    host_messaging::send_debug_message(board, "after hmac");
     hmac.update(&frame_data[..93]);
     let result = hmac.finalize().into_bytes();
 
