@@ -119,27 +119,35 @@ fn subscribe(
         .map(|subscription| {
             let channel_id = subscription.channel;
             let is_new = board.subscriptions.add_subscription(subscription);
-            
+
             let address = if is_new {
                 // Find a new available page for the subscription update
-                let new_address = board.find_available_page().expect("find available page didnt work");
+                let new_address = board
+                    .find_available_page()
+                    .expect("find available page didnt work");
                 board.delay.delay_ms(20);
-                
+
                 new_address
             } else {
-                let &old_address = channel_map.map.get(&channel_id).expect("Weird; check says it should exist.");
+                let &old_address = channel_map
+                    .map
+                    .get(&channel_id)
+                    .expect("Weird; check says it should exist.");
                 unsafe {
-                    board.flc.erase_page(old_address).expect("failed to erase page");
+                    board
+                        .flc
+                        .erase_page(old_address)
+                        .expect("failed to erase page");
                     // TODO: might need delay here
                 }
-                
+
                 old_address
             };
-            
+
             // Write the subscription to the assigned page in flash
             board
-            .write_sub_to_flash(address, &mut data[0..length as usize])
-            .expect("Failed to write to flash");
+                .write_sub_to_flash(address, &mut data[0..length as usize])
+                .expect("Failed to write to flash");
 
             // Rewriting the subscription flash map dictionary
             board
@@ -184,7 +192,8 @@ fn decode(
 
     if let Some(rec) = most_recent_timestamp {
         if packet.timestamp <= *rec {
-            panic!("timestamp reversion in decode");
+            host_messaging::send_error_message(board, "Timestamp reversion.");
+            return Err(FlashError::InvalidAddress);
         }
     }
     *most_recent_timestamp = Some(packet.timestamp);
