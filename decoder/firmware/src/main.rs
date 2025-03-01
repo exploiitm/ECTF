@@ -123,7 +123,7 @@ fn subscribe(
             let address = if is_new {
                 // Find a new available page for the subscription update
                 let new_address = board.find_available_page().expect("find available page didnt work");
-                board.delay.delay_ms(50);
+                board.delay.delay_ms(20);
                 
                 new_address
             } else {
@@ -238,7 +238,7 @@ fn decode(
 
         let key = &sub.kdf.derive(packet.timestamp);
         // host_messaging::send_debug_message_simpl(&mut board.console, &alloc::format!("{:?}", key));
-        board.delay.delay_ms(100);
+        board.delay.delay_ms(20);
         &key.unwrap()
     };
     // host_messaging::send_debug_message_simpl(&mut board.console, "will it happen pt 3");
