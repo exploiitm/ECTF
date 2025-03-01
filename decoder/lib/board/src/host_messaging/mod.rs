@@ -3,6 +3,13 @@ use core::panic;
 
 use super::Board;
 use crate::{CHANNEL_ID_SIZE, MAX_NUM_CHANNELS, TIMESTAMP_SIZE, parse_packet::FRAME_PACKET_SIZE};
+// TODO: Remove this
+use max7800x_hal::{
+    self as hal,
+    gpio::{Af1, InputOutput},
+    pac::{self, Peripherals, Uart0},
+    uart::BuiltUartPeripheral,
+};
 
 pub const MAGIC: u8 = b'%';
 pub const ACK_PACKET: [u8; 4] = [b'%', b'A', 0x00, 0x00];
@@ -107,6 +114,27 @@ pub fn send_debug_message(board: &mut Board, message: &str) {
     };
     board.console.write_bytes(&header.as_bytes());
     board.console.write_bytes(message.as_bytes());
+}
+
+// TODO: REmove this
+pub fn send_debug_message_simpl(
+    board: &mut BuiltUartPeripheral<
+        Uart0,
+        hal::gpio::Pin<0, 0, Af1>,
+        hal::gpio::Pin<0, 1, Af1>,
+        (),
+        (),
+    >, // flc: hal::flc::Flc,
+
+    message: &str,
+) {
+    let length = message.len() as u16;
+    let header = Header {
+        opcode: Opcode::Debug,
+        length,
+    };
+    board.write_bytes(&header.as_bytes());
+    board.write_bytes(message.as_bytes());
 }
 
 pub fn send_error_message(board: &mut Board, message: &str) {

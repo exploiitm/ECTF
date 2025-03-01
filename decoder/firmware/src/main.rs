@@ -113,9 +113,10 @@ fn subscribe(
     let length = header.length.clone();
     board::host_messaging::subscription_update(board, header, &mut data[0..length as usize]);
 
+    board::host_messaging::send_debug_message(board, "hello");
     // Find a new available page for the subscription update
-    let address = board.find_available_page()?;
-    board.delay.delay_ms(50);
+    let address = board.find_available_page().expect("NO page found");
+    board.delay.delay_ms(65);
 
     // Write the subscription to the assigned page in flash
     board
@@ -140,7 +141,7 @@ fn subscribe(
     Ok(())
 }
 
-fn decode (
+fn decode(
     header: &host_messaging::Header,
     board: &mut Board,
     most_recent_timestamp: &mut Option<u64>,
@@ -160,7 +161,14 @@ fn decode (
     let mut sub_index = None;
     // board.delay.delay_ms(50);
 
-    host_messaging::send_debug_message(board, &alloc::format!("timestamp: {}, most recent: {:?}", packet.timestamp, most_recent_timestamp));
+    host_messaging::send_debug_message(
+        board,
+        &alloc::format!(
+            "timestamp: {}, most recent: {:?}",
+            packet.timestamp,
+            most_recent_timestamp
+        ),
+    );
 
     if let Some(rec) = most_recent_timestamp {
         if packet.timestamp <= *rec {
@@ -187,28 +195,41 @@ fn decode (
         }
 
         host_messaging::send_debug_message(board, "after sub_index");
-        host_messaging::send_debug_message(board, &alloc::format!("after sub_index check, sub_index = {:?}", sub_index));
+        // host_messaging::send_debug_message(board, &alloc::format!("after sub_index check, sub_index = {:?}", sub_index));
 
         if sub_index.is_none() {
             host_messaging::send_error_message(board, "No subscription found.");
             return Err(FlashError::InvalidAddress);
         }
 
-        host_messaging::send_debug_message(board, &alloc::format!("after sub_index check, sub_index = {:?}", sub_index));
+        host_messaging::send_debug_message(board, "after sub_index check");
 
         let sub = &board.subscriptions.subscriptions
-            [sub_index.expect("should ideally be impossible but yeah") as usize]
-            .as_ref()
-            .expect("again, should be impossible");
-            
-        if packet.timestamp < sub.start || packet.timestamp > sub.end{
+            [sub_index.expect("should ideally be impossible but yeah") as usize];
+
+        host_messaging::send_debug_message_simpl(&mut board.console, "after indexing");
+
+        let sub = sub.as_ref();
+
+        host_messaging::send_debug_message_simpl(&mut board.console, "after as_ref");
+
+        let sub = sub.expect("again, should be impossible");
+
+        host_messaging::send_debug_message_simpl(&mut board.console, "will it happen");
+
+        if packet.timestamp < sub.start || packet.timestamp > sub.end {
             host_messaging::send_error_message(board, "Timestamp out of bounds.");
             return Err(FlashError::InvalidAddress);
         }
 
+        host_messaging::send_debug_message_simpl(&mut board.console, "will it happen pt 2");
 
-        &sub.kdf.derive(packet.timestamp).expect("Key derivation failed")
+        let key = &sub.kdf.derive(packet.timestamp);
+        host_messaging::send_debug_message_simpl(&mut board.console, &alloc::format!("{:?}", key));
+        board.delay.delay_ms(100);
+        &key.unwrap()
     };
+    host_messaging::send_debug_message_simpl(&mut board.console, "will it happen pt 3");
     host_messaging::send_debug_message(board, "before hmac");
     let mut hmac = HmacSha::new_from_slice(key).expect("can't create HMAC from key");
     host_messaging::send_debug_message(board, "after hmac");
