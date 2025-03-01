@@ -165,22 +165,22 @@ fn decode(
 
     let mut frame_data = [0u8; 125];
     board::host_messaging::read_frame_packet(board, header, &mut frame_data);
-    host_messaging::send_debug_message(board, "gonna enter parse packet\r\n");
+    // host_messaging::send_debug_message(board, "gonna enter parse packet\r\n");
 
     let packet = parse_packet(&frame_data);
 
-    host_messaging::send_debug_message(board, "finished parse_packet\r\n");
+    // host_messaging::send_debug_message(board, "finished parse_packet\r\n");
     let mut sub_index = None;
     // board.delay.delay_ms(50);
 
-    host_messaging::send_debug_message(
-        board,
-        &alloc::format!(
-            "timestamp: {}, most recent: {:?}",
-            packet.timestamp,
-            most_recent_timestamp
-        ),
-    );
+    // host_messaging::send_debug_message(
+    //     board,
+    //     &alloc::format!(
+    //         "timestamp: {}, most recent: {:?}",
+    //         packet.timestamp,
+    //         most_recent_timestamp
+    //     ),
+    // );
 
     if let Some(rec) = most_recent_timestamp {
         if packet.timestamp <= *rec {
@@ -189,7 +189,7 @@ fn decode(
     }
     *most_recent_timestamp = Some(packet.timestamp);
 
-    host_messaging::send_debug_message(board, "after most_recent_timestamp");
+    // host_messaging::send_debug_message(board, "after most_recent_timestamp");
 
     let key = if packet.channel_id == 0 {
         get_key("K0").expect("Fetching K0 failed")
@@ -206,7 +206,7 @@ fn decode(
             }
         }
 
-        host_messaging::send_debug_message(board, "after sub_index");
+        // host_messaging::send_debug_message(board, "after sub_index");
         // host_messaging::send_debug_message(board, &alloc::format!("after sub_index check, sub_index = {:?}", sub_index));
 
         if sub_index.is_none() {
@@ -214,37 +214,37 @@ fn decode(
             return Err(FlashError::InvalidAddress);
         }
 
-        host_messaging::send_debug_message(board, "after sub_index check");
+        // host_messaging::send_debug_message(board, "after sub_index check");
 
         let sub = &board.subscriptions.subscriptions
             [sub_index.expect("should ideally be impossible but yeah") as usize];
 
-        host_messaging::send_debug_message_simpl(&mut board.console, "after indexing");
+        // host_messaging::send_debug_message_simpl(&mut board.console, "after indexing");
 
         let sub = sub.as_ref();
 
-        host_messaging::send_debug_message_simpl(&mut board.console, "after as_ref");
+        // host_messaging::send_debug_message_simpl(&mut board.console, "after as_ref");
 
         let sub = sub.expect("again, should be impossible");
 
-        host_messaging::send_debug_message_simpl(&mut board.console, "will it happen");
+        // host_messaging::send_debug_message_simpl(&mut board.console, "will it happen");
 
         if packet.timestamp < sub.start || packet.timestamp > sub.end {
             host_messaging::send_error_message(board, "Timestamp out of bounds.");
             return Err(FlashError::InvalidAddress);
         }
 
-        host_messaging::send_debug_message_simpl(&mut board.console, "will it happen pt 2");
+        // host_messaging::send_debug_message_simpl(&mut board.console, "will it happen pt 2");
 
         let key = &sub.kdf.derive(packet.timestamp);
-        host_messaging::send_debug_message_simpl(&mut board.console, &alloc::format!("{:?}", key));
+        // host_messaging::send_debug_message_simpl(&mut board.console, &alloc::format!("{:?}", key));
         board.delay.delay_ms(100);
         &key.unwrap()
     };
-    host_messaging::send_debug_message_simpl(&mut board.console, "will it happen pt 3");
-    host_messaging::send_debug_message(board, "before hmac");
+    // host_messaging::send_debug_message_simpl(&mut board.console, "will it happen pt 3");
+    // host_messaging::send_debug_message(board, "before hmac");
     let mut hmac = HmacSha::new_from_slice(key).expect("can't create HMAC from key");
-    host_messaging::send_debug_message(board, "after hmac");
+    // host_messaging::send_debug_message(board, "after hmac");
     hmac.update(&frame_data[..93]);
     let result = hmac.finalize().into_bytes();
 
