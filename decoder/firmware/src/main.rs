@@ -120,16 +120,16 @@ fn subscribe(
             let channel_id = subscription.channel;
             let is_new = board.subscriptions.add_subscription(subscription);
             
-            let address = if (is_new) {
+            let address = if is_new {
                 // Find a new available page for the subscription update
-                let new_address = board.find_available_page()?;
+                let new_address = board.find_available_page().expect("find available page didnt work");
                 board.delay.delay_ms(50);
                 
                 new_address
             } else {
                 let &old_address = channel_map.map.get(&channel_id).expect("Weird; check says it should exist.");
                 unsafe {
-                    self.flc.erase_page(old_page)?;
+                    board.flc.erase_page(old_address).expect("failed to erase page");
                     // TODO: might need delay here
                 }
                 
