@@ -29,10 +29,12 @@ impl<H: KeyHasher> SegtreeKDF<H> {
                     id >>= 1;
                     bit_count += 1;
                 }
-                let insert_at = if let Some(_) = constructed_cover[bit_count][0] {
+                let insert_at = if let None = constructed_cover[bit_count - 1][0] {
+                    0
+                } else if let None = constructed_cover[bit_count - 1][1] {
                     1
                 } else {
-                    0
+                    panic!("Too many nodes at level {}", bit_count);
                 };
                 constructed_cover[bit_count - 1][insert_at] = Some(node);
             }
