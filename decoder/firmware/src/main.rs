@@ -165,7 +165,7 @@ fn decode(
 
     let mut frame_data = [0u8; 125];
     board::host_messaging::read_frame_packet(board, header, &mut frame_data);
-    host_messaging::send_debug_message(board, "gonna enter parse packet\r\n");
+    // host_messaging::send_debug_message(board, "gonna enter parse packet\r\n");
 
     let packet = parse_packet(&frame_data);
 
@@ -173,14 +173,14 @@ fn decode(
     let mut sub_index = None;
     // board.delay.delay_ms(50);
 
-    host_messaging::send_debug_message(
-        board,
-        &alloc::format!(
-            "timestamp: {}, most recent: {:?}",
-            packet.timestamp,
-            most_recent_timestamp
-        ),
-    );
+    // host_messaging::send_debug_message(
+    //     board,
+    //     &alloc::format!(
+    //         "timestamp: {}, most recent: {:?}",
+    //         packet.timestamp,
+    //         most_recent_timestamp
+    //     ),
+    // );
 
     if let Some(rec) = most_recent_timestamp {
         if packet.timestamp <= *rec {
