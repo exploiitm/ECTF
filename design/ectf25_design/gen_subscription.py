@@ -264,9 +264,11 @@ def visualize_cover(l: int, r: int):
         bn = bin(n)[2:]
         ntrunc = n ^ (1 << (len(bn) - 1))
         nodes.append(bin(ntrunc)[2:].rjust(len(bn) - 1) + "x" * (65 - len(bn)))
-    print(bin(l)[2:].rjust(64))
+    if len(c.leaves) > 0:
+        print(bin(c.leaves[0][0])[2:].rjust(64))
     print("\n".join(sorted(nodes)))
-    print(bin(r)[2:].rjust(64))
+    if len(c.leaves) > 1:
+        print(bin(c.leaves[1][0])[2:].rjust(64))
 
 
 if __name__ == "__main__":
