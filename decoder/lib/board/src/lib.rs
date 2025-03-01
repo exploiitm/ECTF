@@ -175,19 +175,19 @@ impl Subscriptions {
             subscriptions: array::from_fn(|_| None),
         }
     }
-    pub fn add_subscription(&mut self, sub: Subscription) {
+    pub fn add_subscription(&mut self, sub: Subscription) -> bool {
         for i in 0..MAX_NUM_CHANNELS {
             match &self.subscriptions[i] {
                 Some(subscription) => {
                     if subscription.channel == sub.channel {
                         self.subscriptions[i] = Some(sub);
-                        return;
+                        return false;
                     }
                 }
                 None => {
                     self.subscriptions[i] = Some(sub);
                     self.size += 1;
-                    return;
+                    return true;
                 }
             }
         }
@@ -458,11 +458,6 @@ impl Board {
         channel_id: u32,
         new_page: u32,
     ) -> Result<(), hal::flc::FlashError> {
-        if let Some(&old_page) = channel_map.map.get(&channel_id) {
-            unsafe {
-                self.flc.erase_page(old_page)?;
-            }
-        }
 
         channel_map.map.insert(channel_id, new_page);
         self.write_channel_map(channel_map)?;

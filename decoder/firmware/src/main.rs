@@ -113,26 +113,39 @@ fn subscribe(
     let length = header.length.clone();
     board::host_messaging::subscription_update(board, header, &mut data[0..length as usize]);
 
-    // Find a new available page for the subscription update
-    let address = board.find_available_page()?;
-    board.delay.delay_ms(50);
-
-    // Write the subscription to the assigned page in flash
-    board
-        .write_sub_to_flash(address, &mut data[0..length as usize])
-        .expect("Failed to write to flash");
-
     // Attempt decryption of the subscription
     let key = get_key("Ks").expect("Ks fetch for subscribe failed");
     decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
         .map(|subscription| {
             let channel_id = subscription.channel;
+            let is_new = board.subscriptions.add_subscription(subscription);
+            
+            let address = if (is_new) {
+                // Find a new available page for the subscription update
+                let new_address = board.find_available_page()?;
+                board.delay.delay_ms(50);
+                
+                new_address
+            } else {
+                let &old_address = channel_map.map.get(&channel_id).expect("Weird; check says it should exist.");
+                unsafe {
+                    self.flc.erase_page(old_page)?;
+                    // TODO: might need delay here
+                }
+                
+                old_address
+            };
+            
+            // Write the subscription to the assigned page in flash
+            board
+            .write_sub_to_flash(address, &mut data[0..length as usize])
+            .expect("Failed to write to flash");
 
             // Rewriting the subscription flash map dictionary
             board
                 .assign_page_for_subscription(channel_map, channel_id, address)
                 .expect("page assignment failed");
-            board.subscriptions.add_subscription(subscription);
+
             host_messaging::succesful_subscription(board);
         })
         .expect("Whole of decrypt sub itself failed");
