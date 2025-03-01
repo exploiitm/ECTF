@@ -175,6 +175,7 @@ impl Subscriptions {
             subscriptions: array::from_fn(|_| None),
         }
     }
+
     pub fn add_subscription(&mut self, sub: Subscription) {
         for i in 0..MAX_NUM_CHANNELS {
             match &self.subscriptions[i] {
