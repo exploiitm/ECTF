@@ -7,12 +7,14 @@ from typing import List, Tuple, Annotated
 from dataclasses import dataclass
 import json
 import secrets
+import hmac
 import hashlib
 import argparse
 from loguru import logger
 from pathlib import Path
 
 Bytes32 = Annotated[bytes, 32]
+
 
 @dataclass(init=True, repr=True)
 class Cover:
@@ -104,7 +106,7 @@ def test_cover():
 
 
 def get_cover(master: Bytes32, begin: int, end: int) -> Cover:
-    
+
     return get_cover_wrapper(master, begin, end, 64)
 
 
@@ -123,10 +125,11 @@ def gen_subscription(
 
     hasher = hashlib.sha3_256()
     hasher.update(Ks)
+    print("DEVICE IDDDD", str(device_id))
     hasher.update(str(device_id).encode())
     # Derive K10 = H(Ks || decoder-id)
     K10 = hasher.digest()
-    print("Final Key Looks Like this", K10.hex().encode())
+    print("Final Key Looks Like this", list(K10))
 
     # Prepare subscription structure
     # subscription_data = {
@@ -188,7 +191,12 @@ def gen_subscription(
     print("This is the IV: ", iv.hex().encode())
     print("CHECK THE TOTAL LENGTH: ", len(
         iv) + len(subscription_data_encrypted))
-    return iv+subscription_data_encrypted  # Returning for verification if needed
+
+    mac = hmac.new(K10, iv + subscription_data_encrypted,
+                   hashlib.sha3_256).digest()
+    # Returning for verification if needed
+    print(f"here is length{len(iv+subscription_data_encrypted + mac)}")
+    return iv+subscription_data_encrypted + mac
 
 
 def parse_args():

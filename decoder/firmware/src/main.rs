@@ -1,189 +1,205 @@
 #![no_std]
 #![no_main]
-pub extern crate max7800x_hal as hal;
-use core::fmt::write;
-
-use alloc::vec;
-use board::decrypt_data;
-use board::host_messaging;
-use board::host_messaging::send_debug_message;
-use board::SHA256Hasher;
-use board::Subscriptions;
-use embedded_io::Write;
-pub use hal::entry;
-pub use hal::pac;
-use hal::pac::adc::limit::W;
-use hmac::{Hmac, Mac};
-use parse_packet::parse_packet;
-use sha3::Sha3_256;
 
 extern crate alloc;
-// use alloc::vec;
+use crate::alloc::collections::BTreeMap;
 
-use segtree_kdf::{self, Key, KeyHasher, MAX_COVER_SIZE};
-include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
-// this comment is useless, added by nithin.
-
-//print function:
-//board.console.write_bytes(b"Hello world\r\n")
-
-use board::Board;
-
-use alloc::format;
+use board::MAX_SUBSCRIPTION_SIZE;
 use embedded_alloc::LlffHeap as Heap;
-use sha3::Digest;
-
+use hmac::{Hmac, Mac};
+use sha3::Sha3_256;
 type HmacSha = Hmac<Sha3_256>;
+
+use board::decrypt_data;
+use board::host_messaging;
+use board::parse_packet::parse_packet;
+use board::Board;
+use board::ChannelFlashMap;
+use hal::entry;
+use hal::flc::FlashError;
+use max7800x_hal as hal;
+
+// Include secrets
+include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
 
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
 
-// 16KB heap (adjust based on your needs)
+// 16KB heap
 const HEAP_SIZE: usize = 1024 * 16;
 static mut HEAP_MEM: [core::mem::MaybeUninit<u8>; HEAP_SIZE] =
     [core::mem::MaybeUninit::uninit(); HEAP_SIZE];
 
 #[entry]
 fn main() -> ! {
-    //initialize the board
-
+    //initializing heap
     unsafe {
         HEAP.init(
             core::ptr::addr_of_mut!(HEAP_MEM).cast::<u8>() as usize,
             HEAP_SIZE,
         );
     }
+
+    //initializing board
     let mut board = Board::new();
     board.delay.delay_ms(500);
-    board.console.write_bytes(b"Board Initialized\r\n");
 
-    // panic!();
-    let is_bit_set = board.is_safety_bit_set();
+    let lockdown_bit = board.is_safety_bit_set();
     board.delay.delay_ms(500);
-    if is_bit_set {
-        board.console.write_bytes(b"No Lockdown Was Triggerred\r\n");
-        board.console.flush().unwrap();
-    } else {
+
+    if !lockdown_bit {
         board.lockdown();
     }
     board.delay.delay_ms(1000);
-    // panic!();
 
-    // let size = size_of::<segtree_kdf::SegtreeKDF::<SHA256Hasher>>();
-    // board::host_messaging::send_debug_message(&mut board, &format!("Size of SegtreeKDF: {}", size));
+    let mut channel_map = board.read_channel_map().unwrap_or(ChannelFlashMap {
+        map: BTreeMap::new(),
+    });
+
+    // Retrieve all the subscriptions from flash and decrupt them
+    for (&_channel_id, &page_addr) in channel_map.map.iter() {
+        let mut data = [0u8; MAX_SUBSCRIPTION_SIZE];
+
+        // Read each sub from flash
+        if let Ok(length) = board.read_sub_from_flash(page_addr, &mut data) {
+            let key = get_key("Ks").expect("Fetching Ks in main for channel from flash failed");
+
+            // Decrypt the subscription and subscribe again to the file
+            decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
+                .map(|subscription| {
+                    board.subscriptions.add_subscription(subscription);
+                })
+                .expect("couldn't decrypt stored subscription lmao");
+        }
+    }
+
     let mut most_recent_timestamp = None;
+
+    // receive opcodes
     loop {
-        let header: board::host_messaging::Header = board::host_messaging::read_header(&mut board);
+        let header = board::host_messaging::read_header(&mut board);
+
         match header.opcode {
             board::host_messaging::Opcode::List => {
                 board::host_messaging::list_subscriptions(&mut board);
             }
+
             board::host_messaging::Opcode::Subscribe => {
-                let mut data = [0u8; 5120];
-                let length = header.length.clone();
-                host_messaging::send_debug_message(
-                    &mut board,
-                    &format!("Header length: {}", length),
-                );
-                board::host_messaging::subscription_update(
-                    &mut board,
-                    header,
-                    &mut data[0..length as usize],
-                );
-                let key = get_key("Ks").unwrap();
-
-                // TODO: Write to flash
-
-                if let Some(subscription) = board::decrypt_data::decrypt_sub(
-                    &mut board,
-                    &mut data[0..length as usize],
-                    *key,
-                ) {
-                    board.subscriptions.add_subscription(subscription);
-                    host_messaging::succesful_subscription(&mut board);
-                } else {
-                    board::host_messaging::send_debug_message(
-                        &mut board,
-                        "Invalid Subscription Received",
-                    );
+                match subscribe(&header, &mut board, &mut channel_map) {
+                    Ok(_) => {}
+                    Err(_) => continue,
                 }
-                board.delay.delay_ms(2000);
             }
+
             board::host_messaging::Opcode::Decode => {
-                let length = header.length;
-                if length != 125 {
-                    panic!("Arivoli is black");
-                }
-                let mut frame_data = [0u8; 125];
-                board::host_messaging::read_frame_packet(&mut board, header, &mut frame_data);
-                let packet = parse_packet(&frame_data);
-                let mut sub_index = None;
-                board.delay.delay_ms(500);
-
-                let key = match packet.channel_id {
-                    0 => get_key("K0").unwrap(),
-                    _ => {
-                        for index in 0..board.subscriptions.size {
-                            if board.subscriptions.subscriptions[index as usize]
-                                .as_ref()
-                                .unwrap()
-                                .channel
-                                == packet.channel_id
-                            {
-                                sub_index = Some(index);
-                                break;
-                            }
-                        }
-
-                        // host_messaging::send_debug_message(&mut board, &format!("{:?}", sub_index));
-                        // host_messaging::send_debug_message(&mut board, "Found subscription");
-
-                        &board.subscriptions.subscriptions[sub_index.unwrap() as usize]
-                            .as_ref()
-                            .unwrap()
-                            .kdf
-                            .derive(packet.timestamp)
-                            .unwrap()
-                    }
-                };
-
-                if let Some(rec) = most_recent_timestamp {
-                    if packet.timestamp < rec {
-                        // host_messaging::send_debug_message(&mut board, "Timestamp is too old");
-                        panic!("lol nigger");
-                    }
-                }
-                most_recent_timestamp = Some(packet.timestamp);
-                // host_messaging::send_debug_message(&mut board, "break3");
-
-                // host_messaging::send_debug_message(&mut board, &format!("{:?}", key));
-
-                let mut hmac = HmacSha::new_from_slice(key).unwrap();
-
-                hmac.update(&frame_data[..93]);
-                let result = hmac.finalize().into_bytes();
-
-                if !result
-                    .iter()
-                    .zip(&frame_data[93..])
-                    .all(|bytes| bytes.0 == bytes.1)
-                {
-                    // host_messaging::send_debug_message(&mut board, "HMAC FAILED NOW");
-                    panic!("Suck my dick")
-                }
-
-                // host_messaging::send_debug_message(&mut board, "HMAC PASSED NIGGERS");
-                let mut result: [u8; 64] = [0u8; 64];
-                board::decrypt_data::decrypt_data(&packet.data_enc, &key, &packet.iv, &mut result);
-                // host_messaging::send_debug_message(&mut board, &format!("Decrypted data: {:?}", result ));
-                let result = &result[0..packet.length as usize];
-
-                host_messaging::write_decoded_packet(&mut board, result);
+                decode(&header, &mut board, &mut most_recent_timestamp)
             }
             _ => {
-                panic!()
+                panic!("Unknown opcode")
             }
         }
     }
-    // panic!();
+}
+
+fn subscribe(
+    header: &host_messaging::Header,
+    board: &mut Board,
+    channel_map: &mut ChannelFlashMap,
+) -> Result<(), FlashError> {
+    let mut data = [0u8; MAX_SUBSCRIPTION_SIZE];
+    let length = header.length.clone();
+    board::host_messaging::subscription_update(board, header, &mut data[0..length as usize]);
+
+    // Find a new available page for the subscription update
+    let address = board.find_available_page()?;
+    board.delay.delay_ms(500);
+
+    // Write the subscription to the assigned page in flash
+    board
+        .write_sub_to_flash(address, &mut data[0..length as usize])
+        .expect("Failed to write to flash");
+
+    // Attempt decryption of the subscription
+    let key = get_key("Ks").expect("Ks fetch for subscribe failed");
+    decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
+        .map(|subscription| {
+            let channel_id = subscription.channel;
+
+            // Rewriting the subscription flash map dictionary
+            board
+                .assign_page_for_subscription(channel_map, channel_id, address)
+                .expect("page assignment failed");
+            board.subscriptions.add_subscription(subscription);
+            host_messaging::succesful_subscription(board);
+        })
+        .expect("Whole of decrypt sub itself failed");
+    board.delay.delay_ms(2000);
+    Ok(())
+}
+
+fn decode(
+    header: &host_messaging::Header,
+    board: &mut Board,
+    most_recent_timestamp: &mut Option<u64>,
+) {
+    let length = header.length;
+    if length != 125 {
+        panic!("length mismatch in decode");
+    }
+
+    let mut frame_data = [0u8; 125];
+    board::host_messaging::read_frame_packet(board, header, &mut frame_data);
+    let packet = parse_packet(&frame_data);
+    let mut sub_index = None;
+    board.delay.delay_ms(500);
+
+    let key = if packet.channel_id == 0 {
+        get_key("K0").expect("Fetching K0 failed")
+    } else {
+        for index in 0..board.subscriptions.size {
+            if board.subscriptions.subscriptions[index as usize]
+                .as_ref()
+                .expect("internal error, check subscriptions array")
+                .channel
+                == packet.channel_id
+            {
+                sub_index = Some(index);
+                break;
+            }
+        }
+
+        &board.subscriptions.subscriptions
+            [sub_index.expect("should ideally be impossible but yeah") as usize]
+            .as_ref()
+            .expect("again, should be impossible")
+            .kdf
+            .derive(packet.timestamp)
+            .expect("Key derivation failed")
+    };
+
+    if let Some(rec) = most_recent_timestamp {
+        if packet.timestamp < *rec {
+            panic!("timestamp reversion in decode");
+        }
+    }
+    *most_recent_timestamp = Some(packet.timestamp);
+
+    let mut hmac = HmacSha::new_from_slice(key).expect("can't create HMAC from key");
+    hmac.update(&frame_data[..93]);
+    let result = hmac.finalize().into_bytes();
+
+    let mut comparison = 0;
+    for byte_tuple in result.iter().zip(&frame_data[93..]) {
+        // host_messaging::send_debug_message(&mut board, "HMAC FAILED NOW");
+        comparison |= byte_tuple.0 ^ byte_tuple.1;
+    }
+
+    if comparison != 0 {
+        panic!("hmacs failure in decode");
+    }
+
+    let mut result: [u8; 64] = [0u8; 64];
+    decrypt_data::decrypt_data(&packet.data_enc, &key, &packet.iv, &mut result);
+    let result = &result[0..packet.length as usize];
+    host_messaging::write_decoded_packet(board, result);
 }
