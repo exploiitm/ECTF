@@ -437,18 +437,19 @@ impl Board {
     }
 
     // Finds and available page for the subscription
-    pub fn find_available_page(&mut self) -> Result<u32, hal::flc::FlashError> {
+    pub fn find_available_page(
+        &mut self,
+        channel_map: &ChannelFlashMap,
+    ) -> Result<u32, hal::flc::FlashError> {
         let start_addr = CHANNEL_PAGE_START;
         let page_size = PAGE_SIZE;
         let num_pages = 10;
 
         for i in 0..num_pages {
             let page_addr = start_addr + (i * page_size);
-            let word = self.flc.read_32(page_addr)?;
 
-            // TODO: Improve this check
-            if word == 0xFFFFFFFF {
-                return Ok(page_addr); // Found an empty page
+            if !channel_map.map.values().any(|&addr| addr == page_addr) {
+                return Ok(page_addr);
             }
         }
 

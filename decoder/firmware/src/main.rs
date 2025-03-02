@@ -123,7 +123,7 @@ fn subscribe(
             let address = if is_new {
                 // Find a new available page for the subscription update
                 let new_address = board
-                    .find_available_page()
+                    .find_available_page(&channel_map)
                     .expect("find available page didnt work");
                 board.delay.delay_ms(20);
 
