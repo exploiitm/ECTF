@@ -401,7 +401,7 @@ impl Board {
 
         let data_len = serialized_data.len() as u32;
 
-        if (data_len + 4) > page_size as usize {
+        if (data_len + 4) > (page_size as usize).try_into().unwrap() {
             return Err(hal::flc::FlashError::NeedsErase);
         }
 
@@ -411,7 +411,7 @@ impl Board {
 
         self.flc.write_32(dict_addr, data_len)?;
 
-        let mut dict_addr_new = dict_addr + 4; // Moved past the size of the data
+        let dict_addr_new = dict_addr + 4; // Moved past the size of the data
         for (i, chunk) in serialized_data.chunks(16).enumerate() {
             let addr = dict_addr_new + (i * 16) as u32;
             let mut padded_chunk = [0xFFu8; 16];
