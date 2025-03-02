@@ -368,6 +368,12 @@ impl Board {
 
         let data_size = self.flc.read_32(dict_addr)? as usize;
 
+        if data_size == 0xFFFFFFFF || data_size == 0 || data_size > PAGE_SIZE as usize {
+            return Ok(ChannelFlashMap {
+                map: BTreeMap::new(),
+            });
+        }
+
         let mut read_addr = dict_addr + 4;
         let mut serialized_data = alloc::vec::Vec::new();
 
