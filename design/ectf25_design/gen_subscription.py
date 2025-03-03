@@ -28,7 +28,7 @@ def enc(input: bytes, key: bytes) -> bytes:
     hasher = hashlib.sha3_256()
     hasher.update(key)
     hasher.update(input)
-    return hasher.digest()[:KEY_LENGTH]
+    return hasher.digest()
 
 
 def enc_right(input: bytes) -> bytes:
