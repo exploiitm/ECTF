@@ -3,11 +3,19 @@ use core::panic;
 
 use super::Board;
 use crate::{CHANNEL_ID_SIZE, MAX_NUM_CHANNELS, TIMESTAMP_SIZE, parse_packet::FRAME_PACKET_SIZE};
+// TODO: Remove this
+use max7800x_hal::{
+    self as hal,
+    gpio::{Af1, InputOutput},
+    pac::{self, Peripherals, Uart0},
+    uart::BuiltUartPeripheral,
+};
 
 pub const MAGIC: u8 = b'%';
 pub const ACK_PACKET: [u8; 4] = [b'%', b'A', 0x00, 0x00];
 pub const SUCCESFUL_SUBSCRIPTION: [u8; 4] = [b'%', b'S', 0x00, 0x00];
 pub const DEBUG_HEADER: [u8; 2] = [b'%', b'G'];
+pub const ERROR_MSG: [u8; 4] = [b'%', b'E', 0x00, 0x00];
 pub const ACK_LENGTH: usize = 256;
 
 pub enum Opcode {
@@ -108,6 +116,48 @@ pub fn send_debug_message(board: &mut Board, message: &str) {
     board.console.write_bytes(message.as_bytes());
 }
 
+// TODO: REmove this
+pub fn send_debug_message_simpl(
+    board: &mut BuiltUartPeripheral<
+        Uart0,
+        hal::gpio::Pin<0, 0, Af1>,
+        hal::gpio::Pin<0, 1, Af1>,
+        (),
+        (),
+    >, // flc: hal::flc::Flc,
+
+    message: &str,
+) {
+    let length = message.len() as u16;
+    let header = Header {
+        opcode: Opcode::Debug,
+        length,
+    };
+    board.write_bytes(&header.as_bytes());
+    board.write_bytes(message.as_bytes());
+}
+
+pub fn send_error_message(board: &mut Board, message: &str) {
+    let length = message.len() as u16;
+
+    // BRo you dont need that much length.
+    if length > 256 {
+        panic!("Message too large");
+    }
+
+    let header = Header {
+        opcode: Opcode::Error,
+        length,
+    };
+    board.console.write_bytes(&header.as_bytes());
+    if read_ack(board) {
+        board.console.write_bytes(message.as_bytes());
+        if read_ack(board) {
+            return;
+        }
+    }
+}
+
 pub fn read_frame_packet(board: &mut Board, header: &Header, data: &mut [u8; FRAME_PACKET_SIZE]) {
     if header.length as usize != data.len() {
         panic!("Read frame packet header length cup");
@@ -116,6 +166,7 @@ pub fn read_frame_packet(board: &mut Board, header: &Header, data: &mut [u8; FRA
     for byte in data {
         *byte = board.console.read_byte();
     }
+    send_debug_message(board, "gonna send final ack inside read_frame_packet");
     board.console.write_bytes(&ACK_PACKET);
 }
 pub fn subscription_update(board: &mut Board, header: &Header, sub_data: &mut [u8]) {

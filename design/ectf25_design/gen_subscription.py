@@ -257,5 +257,17 @@ def main():
                    str(args.subscription_file.absolute())}")
 
 
+def visualize_cover(l: int, r: int):
+    c = (get_cover(b"0" * 32, l, r))
+    nodes = []
+    for n, _ in c.nodes:
+        bn = bin(n)[2:]
+        ntrunc = n ^ (1 << (len(bn) - 1))
+        nodes.append(bin(ntrunc)[2:].rjust(len(bn) - 1) + "x" * (65 - len(bn)))
+    print(bin(l)[2:].rjust(64))
+    print("\n".join(sorted(nodes)))
+    print(bin(r)[2:].rjust(64))
+
+
 if __name__ == "__main__":
     main()
