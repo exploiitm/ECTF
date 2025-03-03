@@ -27,6 +27,7 @@ pub const NODE_SIZE: usize = 8;
 pub const LOOKUP_TABLE_LOCATION: u32 = 0x10032000;
 pub const CHANNEL_PAGE_START: u32 = 0x10034000;
 pub const SAFETY_LOCATION: u32 = 0x10030f88;
+pub const SAFETY_PAGE: u32 = 0x10030000;
 pub const PAGE_SIZE: u32 = 8192;
 pub const MAX_SUBSCRIPTION_SIZE: usize = 5160;
 
@@ -448,7 +449,7 @@ impl Board {
         for i in 0..num_pages {
             let page_addr = start_addr + (i * page_size);
 
-            if !channel_map.map.values().any(|&addr| addr == page_addr) {
+            if !channel_map.map.values().any(|addr| *addr == page_addr) {
                 return Ok(page_addr);
             }
         }
@@ -470,7 +471,7 @@ impl Board {
     }
     pub fn lockdown(&mut self) {
         self.delay.delay_ms(3000);
-        let addr = SAFETY_LOCATION;
+        let addr = SAFETY_PAGE;
         unsafe {
             self.flc
                 .erase_page(addr)
