@@ -27,7 +27,7 @@ pub const NODE_SIZE: usize = 8;
 pub const LOOKUP_TABLE_LOCATION: u32 = 0x10032000;
 pub const CHANNEL_PAGE_START: u32 = 0x10034000;
 pub const SAFETY_LOCATION: u32 = 0x10030f88;
-pub const SAFETY_LOCATION_PAGE: u32 = 0x10030000;
+pub const SAFETY_PAGE: u32 = 0x10030000;
 pub const PAGE_SIZE: u32 = 8192;
 pub const MAX_SUBSCRIPTION_SIZE: usize = 5160;
 
@@ -370,29 +370,28 @@ impl Board {
     // Reads the channel mapping from the flash for reconstruction
     pub fn read_channel_map(&mut self) -> Result<ChannelFlashMap, hal::flc::FlashError> {
         let dict_addr = LOOKUP_TABLE_LOCATION; // Dictionary stored at this address
-        let page_size = PAGE_SIZE;
-        let mut read_addr = dict_addr;
+
+        let data_size = self.flc.read_32(dict_addr)? as usize;
+
+        if data_size == 0xFFFFFFFF || data_size == 0 || data_size > PAGE_SIZE as usize {
+            return Ok(ChannelFlashMap {
+                map: BTreeMap::new(),
+            });
+        }
+
+        let mut read_addr = dict_addr + 4;
         let mut serialized_data = alloc::vec::Vec::new();
 
-        while read_addr < dict_addr + page_size {
+        for _ in 0..(data_size / 16 + 1) {
             let mut chunk = [0u8; 16];
-            let mut is_empty = true;
 
             for (j, word_addr) in (0..4).map(|offset| read_addr + (offset * 4)).enumerate() {
                 let word = self.flc.read_32(word_addr)?;
                 chunk[j * 4..(j + 1) * 4].copy_from_slice(&word.to_le_bytes());
-
-                if word != 0xFFFFFFFF {
-                    is_empty = false;
-                }
             }
 
             read_addr += 16;
             serialized_data.extend_from_slice(&chunk);
-
-            if is_empty {
-                break; // Stop reading if empty space is found
-            }
         }
 
         postcard::from_bytes(&serialized_data).or(Ok(ChannelFlashMap {
@@ -411,7 +410,9 @@ impl Board {
         let serialized_data =
             postcard::to_allocvec(channel_map).map_err(|_| hal::flc::FlashError::InvalidAddress)?;
 
-        if serialized_data.len() > page_size as usize {
+        let data_len = serialized_data.len() as u32;
+
+        if (data_len + 4) > (page_size as usize).try_into().unwrap() {
             return Err(hal::flc::FlashError::NeedsErase);
         }
 
@@ -419,8 +420,11 @@ impl Board {
             self.flc.erase_page(dict_addr)?;
         }
 
+        self.flc.write_32(dict_addr, data_len)?;
+
+        let dict_addr_new = dict_addr + 4; // Moved past the size of the data
         for (i, chunk) in serialized_data.chunks(16).enumerate() {
-            let addr = dict_addr + (i * 16) as u32;
+            let addr = dict_addr_new + (i * 16) as u32;
             let mut padded_chunk = [0xFFu8; 16];
             padded_chunk[..chunk.len()].copy_from_slice(chunk);
 
@@ -438,18 +442,19 @@ impl Board {
     }
 
     // Finds and available page for the subscription
-    pub fn find_available_page(&mut self) -> Result<u32, hal::flc::FlashError> {
+    pub fn find_available_page(
+        &mut self,
+        channel_map: &ChannelFlashMap,
+    ) -> Result<u32, hal::flc::FlashError> {
         let start_addr = CHANNEL_PAGE_START;
         let page_size = PAGE_SIZE;
         let num_pages = 10;
 
         for i in 0..num_pages {
             let page_addr = start_addr + (i * page_size);
-            let word = self.flc.read_32(page_addr)?;
 
-            // TODO: Improve this check
-            if word == 0xFFFFFFFF {
-                return Ok(page_addr); // Found an empty page
+            if !channel_map.map.values().any(|addr| *addr == page_addr) {
+                return Ok(page_addr);
             }
         }
 
@@ -470,7 +475,7 @@ impl Board {
     }
     pub fn lockdown(&mut self) {
         self.delay.delay_ms(3000);
-        let addr = SAFETY_LOCATION_PAGE;
+        let addr = SAFETY_PAGE;
         unsafe {
             self.flc
                 .erase_page(addr)
