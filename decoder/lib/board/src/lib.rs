@@ -344,7 +344,7 @@ impl Board {
         let subscription_size = self.flc.read_32(address)?;
         if subscription_size == 0xFFFFFFFF || subscription_size > MAX_SUBSCRIPTION_SIZE as u32 {
             return Err(hal::flc::FlashError::InvalidAddress);
-        }mohit-ectf-grind
+        }
 
         let mut read_addr = address + 4;
         // Read exactly `subscription_size` bytes into the buffer
