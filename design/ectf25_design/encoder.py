@@ -19,48 +19,29 @@ def jst_hash(data, key):
     hasher = hashlib.sha3_256()
     hasher.update(key)
     hasher.update(data)
-    return hasher.digest()
+    return hasher.digest()[:KEY_LENGTH]
 
 
-def hmac_sha256_hash(data: Bytes32, key: Bytes32) -> Bytes32:
-    '''Default Hash Function (HMAC-SHA256)'''
-    return hmac.new(key, data, hashlib.sha3_256).digest()
-
-
-def aes_based_hash(input_data: Bytes32, key: Bytes32) -> Bytes32:
-    '''Alternative hashing function on the Davies Meyer Algorithm using AES as base.'''
-    cipher = AES.new(key, AES.MODE_ECB)
-    encrypted_data = cipher.encrypt(input_data)
-    return bytes(a ^ b for a, b in zip(encrypted_data, input_data))
-
-
-# Key derivation section  ---------------------------------------------------------------------------------
-# Configuration Constants
-ENCODER_DEPTH = 64  # Maximum depth for key derivation
-# HASH_FUNCTION = hmac_sha256_hash
-HASH_FUNCTION = jst_hash
-
-
-def pad_to_64_bytes(data: bytes) -> Bytes64:
+def pad_to_64_bytes(data: bytes) -> bytes:
     '''Pads the input data to 64 bytes (zero-padded if shorter, truncated if longer)'''
     return data.ljust(64, b'\x00')[:64]
 
 
-def derive_right(parent_key: Bytes32) -> Bytes32:
+def derive_right(parent_key: bytes) -> bytes:
     '''Derives the right segment key from the parent key'''
     right_key_seed = struct.pack(
         "<8I", *([0xDEADBEEF] * 8))  # Fixed right key seed
-    return HASH_FUNCTION(parent_key, right_key_seed)
+    return hash_function(parent_key, right_key_seed)
 
 
-def derive_left(parent_key: Bytes32) -> Bytes32:
+def derive_left(parent_key: bytes) -> bytes:
     '''Derives the left segment key from the parent key'''
     left_key_seed = struct.pack(
         "<8I", *([0xC0D3D00D] * 8))  # Fixed left key seed
-    return HASH_FUNCTION(parent_key, left_key_seed)
+    return hash_function(parent_key, left_key_seed)
 
 
-def derive_key(master_key: Bytes32, timestamp: int) -> Bytes32:
+def derive_key(master_key: bytes, timestamp: int) -> bytes:
     '''Generates a key for a given timestamp using hierarchical derivation'''
     if not (0 <= timestamp < (1 << ENCODER_DEPTH)):
         raise ValueError("Timestamp must be in range 0 to 2^64 - 1")

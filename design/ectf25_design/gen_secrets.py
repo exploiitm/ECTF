@@ -24,12 +24,12 @@ def gen_secrets(channels: list[int]) -> bytes:
     private_key = SigningKey.generate()
 
     assert 0 not in channels, "Channel 0 (Emergency Broadcast) is automatically added"
-    channels.append(0)
 
     global_secrets = {}
     for chan_id in channels:
-        global_secrets["K"+str(chan_id)] = secrets.token_bytes(32).hex()
+        global_secrets["K"+str(chan_id)] = secrets.token_bytes(16).hex()
 
+    global_secrets["K0"] = secrets.token_bytes(32).hex()
     global_secrets["Ks"] = secrets.token_bytes(32).hex()
     global_secrets["Kpr"] = private_key.encode(encoder=HexEncoder).decode()
     global_secrets["Kpu"] = private_key.verify_key.encode(encoder=HexEncoder).decode()
