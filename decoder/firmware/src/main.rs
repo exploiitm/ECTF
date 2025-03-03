@@ -45,6 +45,7 @@ fn main() -> ! {
 
     board.random_delay(250, 350); //Random Delay
 
+    //is lockdown bit set?
     let lockdown_bit = board.is_safety_bit_set();
     board.delay.delay_ms(50);
 
@@ -53,6 +54,7 @@ fn main() -> ! {
     }
     board.delay.delay_ms(50);
 
+    //which page is mapped to which page?
     let mut channel_map = board.read_channel_map().unwrap_or(ChannelFlashMap {
         map: BTreeMap::new(),
     });
@@ -68,7 +70,7 @@ fn main() -> ! {
             let key = get_key("Ks").expect("Fetching Ks in main for channel from flash failed");
 
             // Decrypt the subscription and subscribe again to the file
-            decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
+            decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &mut board)
                 .map(|subscription| {
                     board.random_delay(150, 100); //Random Delay
 
@@ -116,20 +118,15 @@ fn subscribe(
 ) -> Result<(), FlashError> {
     let mut data = [0u8; MAX_SUBSCRIPTION_SIZE];
     let length = header.length.clone();
-    host_messaging::send_debug_message(board, "b1");
     board::host_messaging::subscription_update(board, header, &mut data[0..length as usize]);
 
-    host_messaging::send_debug_message(board, "b1");
     // Attempt decryption of the subscription
     let key = get_key("Ks").expect("Ks fetch for subscribe failed");
-
-    host_messaging::send_debug_message(board, "b1");
 
     decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
         .map(|subscription| {
             let channel_id = subscription.channel;
             let is_new = board.subscriptions.add_subscription(subscription);
-            host_messaging::send_debug_message(board, "b1");
 
             let address = if is_new {
                 // Find a new available page for the subscription update
@@ -160,20 +157,16 @@ fn subscribe(
 
             // Write the subscription to the assigned page in flash
 
-            // board.random_delay(175, 325); //Random Delay
-
-            host_messaging::send_debug_message(board, "b1");
+            // board.random_delay(175, 325); //Random Delay            host_messaging::send_debug_message(board, "b1");
             board
                 .write_sub_to_flash(address, &mut data[0..length as usize])
                 .expect("Failed to write to flash");
 
-            host_messaging::send_debug_message(board, "b1");
             // Rewriting the subscription flash map dictionary
             board
                 .assign_page_for_subscription(channel_map, channel_id, address)
                 .expect("page assignment failed");
 
-            host_messaging::send_debug_message(board, "b1");
             host_messaging::succesful_subscription(board);
         })
         .expect("Whole of decrypt sub itself failed");
@@ -211,7 +204,7 @@ fn decode(
     //         most_recent_timestamp
     //     ),
     // );
-
+    board.random_delay(100, 200);
     if let Some(rec) = most_recent_timestamp {
         if packet.timestamp <= *rec {
             host_messaging::send_error_message(board, "Timestamp reversion.");

@@ -6,6 +6,7 @@ use hmac::{Hmac, Mac};
 use sha3::Sha3_256;
 type HmacSha = Hmac<Sha3_256>;
 
+use crate::Board;
 use crate::Subscription;
 
 pub fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16], buf: &mut [u8; 64]) {
@@ -15,12 +16,19 @@ pub fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16], buf: &mu
     buf.copy_from_slice(&data);
 }
 
-pub fn decrypt_sub(encrypted_sub: &[u8], key: [u8; 32], device_id: u32) -> Option<Subscription> {
+pub fn decrypt_sub(
+    encrypted_sub: &[u8],
+    key: [u8; 32],
+    device_id: u32,
+    board: &mut Board,
+) -> Option<Subscription> {
     let iv = GenericArray::from_slice(&encrypted_sub[0..16]);
     let ciphertext = &encrypted_sub[16..(encrypted_sub.len() - 32)];
 
     let k10_new = GenericArray::from_slice(&key);
     let decryptor = Aes256CbcDec::new(k10_new, iv);
+
+    board.random_delay(100, 100);
     let decrypted_data = decryptor
         .decrypt_padded_vec_mut::<NoPadding>(ciphertext)
         .expect("Data decryption failed in decrypt sub bro");
@@ -39,6 +47,7 @@ pub fn decrypt_sub(encrypted_sub: &[u8], key: [u8; 32], device_id: u32) -> Optio
         comparison |= byte_tuple.0 ^ byte_tuple.1;
     }
 
+    board.random_delay(100, 100);
     if comparison != 0 {
         panic!("HMAC failure in decrypt sub");
     }

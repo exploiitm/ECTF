@@ -499,7 +499,7 @@ impl Board {
         let inner_val = self.gen_u32_trng() % inner_max;
         for i in 0..outer_val {
             for j in 0..inner_val {
-                let val = out_val.wrapping_mul(i).wrapping_add(69);
+                let val = (i + j).wrapping_mul(i).wrapping_add(69);
                 let val = val.wrapping_mul(420).wrapping_sub(j);
                 unsafe {
                     core::ptr::write_volatile(out_ptr, val);
