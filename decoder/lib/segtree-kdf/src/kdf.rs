@@ -9,11 +9,17 @@ pub struct Node {
     pub key: Key,
 }
 
-// type Cache = [Option<Node>; TREE_HEIGHT + 1];
+#[cfg(feature = "cache")]
+use core::cell::RefCell;
+#[cfg(feature = "cache")]
+type Cache = [Option<Node>; TREE_HEIGHT + 1];
 
 pub struct SegtreeKDF<H: KeyHasher> {
     pub cover: [[Option<Node>; 2]; TREE_HEIGHT + 1],
     hash: H,
+
+    #[cfg(feature = "cache")]
+    cache: RefCell<Cache>,
 }
 
 impl<H: KeyHasher> SegtreeKDF<H> {
@@ -44,29 +50,9 @@ impl<H: KeyHasher> SegtreeKDF<H> {
         Self {
             cover: constructed_cover,
             hash: H::new(),
+            #[cfg(feature = "cache")]
+            cache: RefCell::new(array::from_fn(|_| None)),
         }
-    }
-
-    fn try_derive(&self, id: u64, level: usize /* , cache: &mut Cache */) -> Option<Key> {
-        for c in &self.cover[level] {
-            if let Some(node) = c {
-                if node.id == id {
-                    return Some(node.key.clone());
-                }
-            }
-        }
-
-        if level == 0 {
-            return None;
-        }
-
-        let par_key = self.try_derive(id >> 1, level - 1 /* , cache */)?;
-        let node = Node {
-            id,
-            key: self.hash.hash(&par_key, id & 1 == 1),
-        };
-        // cache[level] = Some(node.clone());
-        Some(node.key)
     }
 
     pub fn derive(&self, id: u64) -> Option<Key> {
@@ -78,13 +64,60 @@ impl<H: KeyHasher> SegtreeKDF<H> {
             }
         }
 
-        let par_id = (id >> 1) | (1 << 63);
-        let par = self.try_derive(par_id, TREE_HEIGHT - 1)?;
-        let node = Node {
-            id,
-            key: self.hash.hash(&par, id & 1 == 1),
-        };
-        // cache[TREE_HEIGHT] = Some(node.clone());
-        Some(node.key)
+        #[cfg(feature = "cache")]
+        let cache = self.cache.borrow();
+
+        let mut par = None;
+        let mut level = None;
+        'outer: for i in 1..(TREE_HEIGHT + 1) {
+            let id_trunc = if i == 64 { 0 } else { id >> i };
+            let par_id = id_trunc | (1 << (TREE_HEIGHT - i));
+
+            #[cfg(feature = "cache")]
+            if let Some(node) = &cache[i] {
+                if node.id == par_id {
+                    par = Some(node);
+                    level = Some(i);
+                    break 'outer;
+                }
+            }
+
+            for c in &self.cover[TREE_HEIGHT - i] {
+                if let Some(node) = c {
+                    if node.id == par_id {
+                        par = Some(node);
+                        level = Some(i);
+                        break 'outer;
+                    }
+                }
+            }
+        }
+
+        let par = par?;
+        let level = level?;
+
+        let mut key = par.key.clone();
+        let mut cons_id = par.id;
+
+        #[cfg(feature = "cache")]
+        drop(cache);
+        #[cfg(feature = "cache")]
+        let mut cache = self.cache.borrow_mut();
+
+        for i in (TREE_HEIGHT - level)..TREE_HEIGHT {
+            let id_bit = id & (1 << (TREE_HEIGHT - i - 1));
+            key = self.hash.hash(&key, id_bit != 0);
+            cons_id = cons_id << 1 | (if id_bit == 0 { 0 } else { 1 });
+
+            #[cfg(feature = "cache")]
+            {
+                cache[i] = Some(Node {
+                    id: cons_id,
+                    key: key.clone(),
+                });
+            }
+        }
+
+        Some(key)
     }
 }

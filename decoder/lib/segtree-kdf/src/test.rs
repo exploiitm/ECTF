@@ -54,7 +54,7 @@ fn derives_right_from_zero() {
         key: [0; KEY_SIZE],
     });
     let last_layer = [None, None];
-    let kdf = SegtreeKDF::<DummyHasher>::new(&cover, &last_layer);
+    let kdf = SegtreeKDF::<DummyHasher>::new(cover, last_layer);
 
     let mut key = [0; KEY_SIZE];
     key[0] = 64;
@@ -69,7 +69,7 @@ fn derives_alternating_from_zero() {
         key: [0; KEY_SIZE],
     });
     let last_layer = [None, None];
-    let kdf = SegtreeKDF::<DummyHasher>::new(&cover, &last_layer);
+    let kdf = SegtreeKDF::<DummyHasher>::new(cover, last_layer);
 
     let key = [0; KEY_SIZE];
     assert_eq!(kdf.derive(0x5555_5555_5555_5555), Some(key));
@@ -86,7 +86,7 @@ fn accepts_leaf() {
         None,
     ];
 
-    let kdf = SegtreeKDF::<DummyHasher>::new(&cover, &last_layer);
+    let kdf = SegtreeKDF::<DummyHasher>::new(cover, last_layer);
     let key = [5; KEY_SIZE];
     assert_eq!(kdf.derive(5), Some(key));
 }
@@ -100,7 +100,51 @@ fn accepts_node() {
     });
     let last_layer = [None, None];
 
-    let kdf = SegtreeKDF::<DummyHasher>::new(&cover, &last_layer);
+    let kdf = SegtreeKDF::<DummyHasher>::new(cover, last_layer);
     let key = [5; KEY_SIZE];
     assert_eq!(kdf.derive(0x2345_AAAA_AAAA_AAAA), Some(key));
+}
+
+#[test]
+fn accepts_subarray() {
+    let mut cover: [Option<Node>; MAX_COVER_SIZE] = array::from_fn(|_| None);
+    cover[0] = Some(Node {
+        id: 0x12345,
+        key: [5; KEY_SIZE],
+    });
+    let last_layer = [None, None];
+
+    let kdf = SegtreeKDF::<DummyHasher>::new(cover, last_layer);
+    let key = [5; KEY_SIZE];
+    assert_eq!(kdf.derive(0x2345_AAAA_AAAA_AAAA), Some(key));
+}
+
+#[test]
+fn all_subarray_some() {
+    let mut cover: [Option<Node>; MAX_COVER_SIZE] = array::from_fn(|_| None);
+    cover[0] = Some(Node {
+        id: 0x8000_0000_0000_0001,
+        key: [0; KEY_SIZE],
+    });
+    cover[1] = Some(Node {
+        id: 0x8000_0000_0000_0002,
+        key: [0; KEY_SIZE],
+    });
+    let last_layer = [
+        Some(Node {
+            id: 1,
+            key: [0; KEY_SIZE],
+        }),
+        Some(Node {
+            id: 6,
+            key: [0; KEY_SIZE],
+        }),
+    ];
+
+    let kdf = SegtreeKDF::<DummyHasher>::new(cover, last_layer);
+    for i in 1..6 {
+        if let None = kdf.derive(i) {
+            panic!("derive({}) returned None", i);
+        }
+    }
 }
