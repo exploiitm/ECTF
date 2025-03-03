@@ -14,14 +14,14 @@ use max7800x_hal::{
     pac::{self, Peripherals, Uart0},
     uart::BuiltUartPeripheral,
 };
-use segtree_kdf::{self, Key, KeyHasher};
+use segtree_kdf::{self, KEY_SIZE, Key, KeyHasher};
 
 pub mod parse_packet;
 
 pub const CHANNEL_ID_SIZE: usize = 4;
 pub const TIMESTAMP_SIZE: usize = 8;
 pub const MAX_NUM_CHANNELS: usize = 8;
-pub const KEY_LENGTH: usize = 32;
+pub const KEY_LENGTH: usize = KEY_SIZE;
 pub const NODE_SIZE: usize = 8;
 
 pub const LOOKUP_TABLE_LOCATION: u32 = 0x10032000;
@@ -46,12 +46,12 @@ pub struct Board {
     pub trng: hal::trng::Trng,
 }
 
-pub struct SHA256Hasher {
-    pub key_left: Key,
-    pub key_right: Key,
+pub struct SHA256HasherTrunc128 {
+    pub key_left: [u8; 32],
+    pub key_right: [u8; 32],
 }
 
-impl KeyHasher for SHA256Hasher {
+impl KeyHasher for SHA256HasherTrunc128 {
     fn new() -> Self {
         let key_left_base: u32 = 0xDEADBEEF;
         let key_left = key_left_base
@@ -66,7 +66,7 @@ impl KeyHasher for SHA256Hasher {
             .try_into()
             .expect("Right key into array failed in KeyHasher::new");
 
-        SHA256Hasher {
+        SHA256HasherTrunc128 {
             key_left,
             key_right,
         }
@@ -82,10 +82,10 @@ impl KeyHasher for SHA256Hasher {
         mac.update(&key);
         mac.update(data);
 
-        mac.finalize()
-            .as_slice()
+        let slice = mac.finalize().as_slice()[..KEY_SIZE]
             .try_into()
-            .expect("mac finalization failed")
+            .expect("mac finalization failed");
+        return slice;
     }
 }
 
@@ -107,7 +107,7 @@ pub struct Subscription {
     pub channel: u32,
     pub start: u64,
     pub end: u64,
-    pub kdf: segtree_kdf::SegtreeKDF<SHA256Hasher>,
+    pub kdf: segtree_kdf::SegtreeKDF<SHA256HasherTrunc128>,
 }
 
 pub struct Subscriptions {
@@ -159,7 +159,7 @@ impl Subscription {
             let node = segtree_kdf::Node { id, key: key_bytes };
             last_layer[i] = Some(node);
         }
-        let kdf = segtree_kdf::SegtreeKDF::<SHA256Hasher>::new(cover, last_layer);
+        let kdf = segtree_kdf::SegtreeKDF::new(cover, last_layer);
 
         Subscription {
             channel,
@@ -404,7 +404,7 @@ impl Board {
         &mut self,
         channel_map: &ChannelFlashMap,
     ) -> Result<(), hal::flc::FlashError> {
-        let dict_addr = LOOKUP_TABLE_LOCATION; // TODO:finalise the page/location in the memory 
+        let dict_addr = LOOKUP_TABLE_LOCATION; // TODO:finalise the page/location in the memory
         let page_size = PAGE_SIZE;
 
         let serialized_data =
@@ -488,23 +488,24 @@ impl Board {
         self.delay.delay_ms(3000);
     }
 
-    pub fn gen_u32_trng(&mut self)-> u32{
+    pub fn gen_u32_trng(&mut self) -> u32 {
         self.trng.gen_u32()
     }
 
-    pub fn random_delay(&mut self, outer_max: u32, inner_max: u32 ){
-        
-        let mut out_val = 0; 
-        let out_ptr: *mut u32 = &mut out_val; 
-        let outer_val = self.gen_u32_trng() % outer_max; 
-        let inner_val = self.gen_u32_trng() % inner_max; 
-        for i in 0..outer_val { 
-            for j in 0..inner_val { 
-                let val = out_val.wrapping_mul(i).wrapping_add(69); 
-                let val = val.wrapping_mul(420).wrapping_sub(j); 
-                unsafe { core::ptr::write_volatile(out_ptr, val); } 
-            } 
-        } 
+    pub fn random_delay(&mut self, outer_max: u32, inner_max: u32) {
+        let mut out_val = 0;
+        let out_ptr: *mut u32 = &mut out_val;
+        let outer_val = self.gen_u32_trng() % outer_max;
+        let inner_val = self.gen_u32_trng() % inner_max;
+        for i in 0..outer_val {
+            for j in 0..inner_val {
+                let val = out_val.wrapping_mul(i).wrapping_add(69);
+                let val = val.wrapping_mul(420).wrapping_sub(j);
+                unsafe {
+                    core::ptr::write_volatile(out_ptr, val);
+                }
+            }
+        }
     }
 }
 
