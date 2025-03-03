@@ -42,7 +42,8 @@ fn main() -> ! {
 
     //initializing board
     let mut board = Board::new();
-    board.delay.delay_ms(50);
+
+    board.random_delay(250, 350); //Random Delay
 
     let lockdown_bit = board.is_safety_bit_set();
     board.delay.delay_ms(50);
@@ -56,6 +57,8 @@ fn main() -> ! {
         map: BTreeMap::new(),
     });
 
+    board.random_delay(500, 300); //Random Delay
+
     // Retrieve all the subscriptions from flash and decrupt them
     for (&_channel_id, &page_addr) in channel_map.map.iter() {
         let mut data = [0u8; MAX_SUBSCRIPTION_SIZE];
@@ -67,6 +70,9 @@ fn main() -> ! {
             // Decrypt the subscription and subscribe again to the file
             decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
                 .map(|subscription| {
+
+                    board.random_delay(150, 100); //Random Delay
+
                     board.subscriptions.add_subscription(subscription);
                 })
                 .expect("couldn't decrypt stored subscription lmao");
@@ -125,7 +131,8 @@ fn subscribe(
                 let new_address = board
                     .find_available_page()
                     .expect("find available page didnt work");
-                board.delay.delay_ms(20);
+
+                board.random_delay(200, 300); //Random Delay
 
                 new_address
             } else {
@@ -140,11 +147,16 @@ fn subscribe(
                         .expect("failed to erase page");
                     // TODO: might need delay here
                 }
-                board.delay.delay_ms(10);
+
+                board.random_delay(100, 500); //Random Delay
+
                 old_address
             };
 
             // Write the subscription to the assigned page in flash
+
+            board.random_delay(175, 325); //Random Delay
+
             board
                 .write_sub_to_flash(address, &mut data[0..length as usize])
                 .expect("Failed to write to flash");
@@ -157,7 +169,9 @@ fn subscribe(
             host_messaging::succesful_subscription(board);
         })
         .expect("Whole of decrypt sub itself failed");
-    // board.delay.delay_ms(20);
+
+    board.random_delay(295, 185); //Random Delay
+    
     Ok(())
 }
 
@@ -247,7 +261,9 @@ fn decode(
 
         let key = &sub.kdf.derive(packet.timestamp);
         // host_messaging::send_debug_message_simpl(&mut board.console, &alloc::format!("{:?}", key));
-        board.delay.delay_ms(20);
+
+        board.random_delay(225,400); //Random Delay
+
         &key.unwrap()
     };
     // host_messaging::send_debug_message_simpl(&mut board.console, "will it happen pt 3");

@@ -344,7 +344,7 @@ impl Board {
         let subscription_size = self.flc.read_32(address)?;
         if subscription_size == 0xFFFFFFFF || subscription_size > MAX_SUBSCRIPTION_SIZE as u32 {
             return Err(hal::flc::FlashError::InvalidAddress);
-        }
+        }mohit-ectf-grind
 
         let mut read_addr = address + 4;
         // Read exactly `subscription_size` bytes into the buffer
@@ -483,8 +483,23 @@ impl Board {
         self.delay.delay_ms(3000);
     }
 
-    pub fn gen_u32_trng(&mut self) -> u32 {
+    pub fn gen_u32_trng(&mut self)-> u32{
         self.trng.gen_u32()
+    }
+
+    pub fn random_delay(&mut self, outer_max: u32, inner_max: u32 ){
+        
+        let mut out_val = 0; 
+        let out_ptr: *mut u32 = &mut out_val; 
+        let outer_val = self.gen_u32_trng() % outer_max; 
+        let inner_val = self.gen_u32_trng() % inner_max; 
+        for i in 0..outer_val { 
+            for j in 0..inner_val { 
+                let val = out_val.wrapping_mul(i).wrapping_add(69); 
+                let val = val.wrapping_mul(420).wrapping_sub(j); 
+                unsafe { core::ptr::write_volatile(out_ptr, val); } 
+            } 
+        } 
     }
 }
 
