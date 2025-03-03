@@ -123,7 +123,7 @@ fn subscribe(
     // Attempt decryption of the subscription
     let key = get_key("Ks").expect("Ks fetch for subscribe failed");
 
-    decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
+    decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, board)
         .map(|subscription| {
             let channel_id = subscription.channel;
             let is_new = board.subscriptions.add_subscription(subscription);
