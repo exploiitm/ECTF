@@ -52,7 +52,6 @@ def derive_right(parent_key: Bytes32) -> Bytes32:
     return HASH_FUNCTION(parent_key, right_key_seed)
 
 
-
 def derive_left(parent_key: Bytes32) -> Bytes32:
     '''Derives the left segment key from the parent key'''
     left_key_seed = struct.pack(
@@ -94,8 +93,9 @@ class Encoder:
         """
 
         if "K" + str(channel) not in self.global_secrets:
+            print(channel)
             raise ValueError(
-                "Invalid channel: No secret key found for the given channel")
+                "Invalid channel: No secret key found for the given channel" + str(channel))
 
         if channel == 0:
             timestamp_key = bytes.fromhex(self.global_secrets["K0"])
@@ -114,7 +114,7 @@ class Encoder:
 
         # print("Unencrypted Frame:", list(pad_to_64_bytes(frame)))
         # print("Encrypted Frame:", list(encrypted_frame))
-    
+
         # Construct packet header
         packet_header = (
             timestamp.to_bytes(8, 'little') +  # 64-bit timestamp
