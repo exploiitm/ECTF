@@ -79,15 +79,14 @@ class Encoder:
                 "Invalid channel: No secret key found for the given channel" + str(channel))
 
         if channel == 0:
-            timestamp_key_raw = bytes.fromhex(self.global_secrets["K0"])
+            timestamp_key = bytes.fromhex(self.global_secrets["K0"])
 
         else:
             # Retrieve the master key for the given channel
             master_key = bytes.fromhex(self.global_secrets["K" + str(channel)])
             # Generate a timestamp-specific key using hierarchical derivation
             timestamp_key_raw = derive_key(master_key, timestamp)
-
-        timestamp_key = hashlib.sha3_256(timestamp_key_raw).digest()
+            timestamp_key = hashlib.sha3_256(timestamp_key_raw).digest()
 
         # Generate a unique IV
         iv = os.urandom(16)
