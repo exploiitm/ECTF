@@ -5,10 +5,15 @@ extern crate alloc;
 use crate::alloc::collections::BTreeMap;
 
 use board::MAX_SUBSCRIPTION_SIZE;
+use ed25519_dalek::ed25519::signature;
+use ed25519_dalek::Signature;
+use ed25519_dalek::SigningKey;
+use ed25519_dalek::{Verifier, VerifyingKey};
 use embedded_alloc::LlffHeap as Heap;
 use hmac::{Hmac, Mac};
-use sha3::Sha3_256;
+use sha3::{digest::generic_array::GenericArray, Sha3_256};
 type HmacSha = Hmac<Sha3_256>;
+use embedded_io::Write;
 
 use board::decrypt_data;
 use board::host_messaging;
@@ -68,9 +73,8 @@ fn main() -> ! {
             let key = get_key("Ks").expect("Fetching Ks in main for channel from flash failed");
 
             // Decrypt the subscription and subscribe again to the file
-            decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
+            decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU)
                 .map(|subscription| {
-
                     board.random_delay(150, 100); //Random Delay
 
                     board.subscriptions.add_subscription(subscription);
@@ -81,7 +85,6 @@ fn main() -> ! {
 
     let mut most_recent_timestamp = None;
 
-    // receive opcodes
     loop {
         let header = board::host_messaging::read_header(&mut board);
 
@@ -121,7 +124,7 @@ fn subscribe(
 
     // Attempt decryption of the subscription
     let key = get_key("Ks").expect("Ks fetch for subscribe failed");
-    decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID)
+    decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU)
         .map(|subscription| {
             let channel_id = subscription.channel;
             let is_new = board.subscriptions.add_subscription(subscription);
@@ -171,7 +174,7 @@ fn subscribe(
         .expect("Whole of decrypt sub itself failed");
 
     board.random_delay(295, 185); //Random Delay
-    
+
     Ok(())
 }
 
@@ -181,11 +184,11 @@ fn decode(
     most_recent_timestamp: &mut Option<u64>,
 ) -> Result<(), FlashError> {
     let length = header.length;
-    if length != 125 {
+    if length != 189 {
         panic!("length mismatch in decode");
     }
 
-    let mut frame_data = [0u8; 125];
+    let mut frame_data = [0u8; 189];
     board::host_messaging::read_frame_packet(board, header, &mut frame_data);
     // host_messaging::send_debug_message(board, "gonna enter parse packet\r\n");
 
@@ -262,7 +265,7 @@ fn decode(
         let key = &sub.kdf.derive(packet.timestamp);
         // host_messaging::send_debug_message_simpl(&mut board.console, &alloc::format!("{:?}", key));
 
-        board.random_delay(225,400); //Random Delay
+        board.random_delay(225, 400); //Random Delay
 
         &key.unwrap()
     };
@@ -281,6 +284,20 @@ fn decode(
 
     if comparison != 0 {
         panic!("hmacs failure in decode");
+    }
+
+    let verification_key =
+        VerifyingKey::from_bytes(&KPU).expect("KPU is not a valid verifying key");
+    let signature_received = packet.signature;
+    let result = verification_key
+        .verify(
+            &frame_data[..125],
+            &Signature::try_from(signature_received).unwrap(),
+        )
+        .is_ok();
+
+    if result == false {
+        panic!("signature verification failed");
     }
 
     let mut result: [u8; 64] = [0u8; 64];

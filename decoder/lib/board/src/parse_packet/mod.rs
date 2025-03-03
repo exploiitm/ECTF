@@ -1,4 +1,6 @@
-pub const FRAME_PACKET_SIZE: usize = 125;
+use ed25519_dalek::ed25519::signature;
+
+pub const FRAME_PACKET_SIZE: usize = 189;
 
 #[derive(Debug, Clone)]
 pub struct Packet {
@@ -8,6 +10,7 @@ pub struct Packet {
     pub iv: [u8; 16],
     pub data_enc: [u8; 64],
     pub hmac: [u8; 32],
+    pub signature: [u8; 64],
 }
 
 pub fn parse_packet(input: &[u8; FRAME_PACKET_SIZE]) -> Packet {
@@ -17,6 +20,7 @@ pub fn parse_packet(input: &[u8; FRAME_PACKET_SIZE]) -> Packet {
     let mut iv = [0u8; 16];
     let mut data_enc = [0u8; 64];
     let mut hmac = [0u8; 32];
+    let mut signature = [0u8; 64];
 
     timestamp_bytes.copy_from_slice(&input[0..8]);
     channel_id_bytes.copy_from_slice(&input[8..12]);
@@ -24,6 +28,7 @@ pub fn parse_packet(input: &[u8; FRAME_PACKET_SIZE]) -> Packet {
     iv.copy_from_slice(&input[13..29]);
     data_enc.copy_from_slice(&input[29..93]);
     hmac.copy_from_slice(&input[93..125]);
+    signature.copy_from_slice(&input[125..189]);
 
     Packet {
         timestamp: u64::from_le_bytes(timestamp_bytes),
@@ -32,5 +37,6 @@ pub fn parse_packet(input: &[u8; FRAME_PACKET_SIZE]) -> Packet {
         iv,
         data_enc,
         hmac,
+        signature,
     }
 }

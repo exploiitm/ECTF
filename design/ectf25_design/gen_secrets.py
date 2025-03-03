@@ -5,6 +5,9 @@ from pathlib import Path
 from loguru import logger
 import secrets
 
+from nacl.signing import SigningKey
+from nacl.encoding import HexEncoder
+
 
 def gen_secrets(channels: list[int]) -> bytes:
     """Generate the contents secrets file
@@ -18,6 +21,8 @@ def gen_secrets(channels: list[int]) -> bytes:
 
     :returns: Contents of the secrets file
     """
+    private_key = SigningKey.generate()
+
     assert 0 not in channels, "Channel 0 (Emergency Broadcast) is automatically added"
     channels.append(0)
 
@@ -26,6 +31,8 @@ def gen_secrets(channels: list[int]) -> bytes:
         global_secrets["K"+str(chan_id)] = secrets.token_bytes(32).hex()
 
     global_secrets["Ks"] = secrets.token_bytes(32).hex()
+    global_secrets["Kpr"] = private_key.encode(encoder=HexEncoder).decode()
+    global_secrets["Kpu"] = private_key.verify_key.encode(encoder=HexEncoder).decode()
 
     return json.dumps(global_secrets).encode('utf-8')
 

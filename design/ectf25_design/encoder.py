@@ -8,11 +8,12 @@ from Crypto.Cipher import AES
 import hashlib
 import hmac
 
+from nacl.signing import SigningKey
+
 # Type annotations for byte arrays of specific sizes
 Bytes64 = Annotated[bytes, 64]
 Bytes32 = Annotated[bytes, 32]
 Bytes4 = Annotated[bytes, 4]
-
 
 def jst_hash(data, key):
     hasher = hashlib.sha3_256()
@@ -106,6 +107,8 @@ class Encoder:
             # Generate a timestamp-specific key using hierarchical derivation
             timestamp_key = derive_key(master_key, timestamp)
 
+        private_key = SigningKey(bytes.fromhex(self.global_secrets["Kpr"]))
+
         # Generate a unique IV
         iv = os.urandom(16)
         # Encrypt the frame using AES-ECB with the derived key
@@ -125,14 +128,18 @@ class Encoder:
         packet_unsigned = packet_header + encrypted_frame
 
         # Generate HMAC signature using the same timestamp key
-        signature = hmac.new(timestamp_key, packet_unsigned,
+        signature_hmac = hmac.new(timestamp_key, packet_unsigned,
                              hashlib.sha3_256).digest()
+        
+        packet_hmaced = packet_unsigned + signature_hmac
+        signature_ecdsa = private_key.sign(packet_hmaced).signature
+
         # print("Key:", list(timestamp_key))
         # print("Data:", list(packet_unsigned))
         # print("Hmac:", list(signature))
 
         # Return the full encoded packet (header + encrypted data + HMAC signature)
-        return packet_unsigned + signature
+        return packet_hmaced + signature_ecdsa
 
 # Test main code --------------------------------------------------------------------------------------------
 

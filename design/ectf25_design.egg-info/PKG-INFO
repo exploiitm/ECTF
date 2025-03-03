@@ -4,3 +4,4 @@ Version: 1.0.0
 Requires-Python: >=3.11
 Requires-Dist: loguru
 Requires-Dist: pycryptodome
+Requires-Dist: pynacl

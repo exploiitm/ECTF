@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use hex;
 use serde_json;
+use sha3::digest::generic_array::GenericArray;
 use sha3::{Digest, Sha3_256};
 
 fn main() {
@@ -39,6 +40,11 @@ fn main() {
     rust_code.push_str("// Auto-generated file, do not edit manually!\n");
 
     if let serde_json::Value::Object(map) = json {
+        let value = map.get("Kpu").unwrap().as_str().unwrap();
+        let hex_val = hex::decode(value);
+        let value = hex_val.unwrap();
+        rust_code.push_str(&format!("const KPU: [u8; 32] = {:?}", value));
+        rust_code.push_str(";\n");
         rust_code.push_str(
             "fn get_key(key: &str) -> Option<&'static [u8; 32]> {
             match key { \n",
@@ -78,5 +84,7 @@ fn main() {
         }",
     );
     let out_dir = env::var("OUT_DIR").unwrap();
+    let code2 = rust_code.clone();
     fs::write(format!("{}/secrets.rs", out_dir), rust_code).expect("Failed to write secrets.rs");
+    fs::write(format!("{}/nigger..rs", out_dir), code2).expect("Failed to write secrets.rs");
 }

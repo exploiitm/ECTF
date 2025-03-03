@@ -13,6 +13,8 @@ import argparse
 from loguru import logger
 from pathlib import Path
 
+from nacl.signing import SigningKey
+
 Bytes32 = Annotated[bytes, 32]
 
 
@@ -194,9 +196,13 @@ def gen_subscription(
 
     mac = hmac.new(K10, iv + subscription_data_encrypted,
                    hashlib.sha3_256).digest()
+    
+    private_key = SigningKey(bytes.fromhex(global_secrets["Kpr"]))
+    sign = private_key.sign(iv + subscription_data_encrypted + mac).signature
+    
     # Returning for verification if needed
-    print(f"here is length{len(iv+subscription_data_encrypted + mac)}")
-    return iv+subscription_data_encrypted + mac
+    print(f"here is length{len(iv+subscription_data_encrypted + mac + sign)}")
+    return iv+subscription_data_encrypted + mac + sign
 
 
 def parse_args():
