@@ -27,6 +27,7 @@ pub const NODE_SIZE: usize = 8;
 pub const LOOKUP_TABLE_LOCATION: u32 = 0x10032000;
 pub const CHANNEL_PAGE_START: u32 = 0x10034000;
 pub const SAFETY_LOCATION: u32 = 0x10030f88;
+pub const SAFETY_LOCATION_PAGE: u32 = 0x10030000;
 pub const PAGE_SIZE: u32 = 8192;
 pub const MAX_SUBSCRIPTION_SIZE: usize = 5160;
 
@@ -42,6 +43,7 @@ pub struct Board {
     pub flc: hal::flc::Flc,
     led_pins: LedPins,
     pub subscriptions: Subscriptions,
+    pub trng: hal::trng::Trng,
 }
 
 pub struct SHA256Hasher {
@@ -250,6 +252,8 @@ impl Board {
                 .parity(hal::uart::ParityBit::None)
                 .build();
 
+        let trng = hal::trng::Trng::new(peripherals.trng, &mut gcr.reg);
+
         let flc = hal::flc::Flc::new(peripherals.flc, clks.sys_clk);
         console.write_bytes(b"Flash Initialized\r\n");
         Board {
@@ -263,6 +267,7 @@ impl Board {
                 },
             },
             subscriptions: Subscriptions::new(),
+            trng,
         }
     }
 
@@ -458,7 +463,6 @@ impl Board {
         channel_id: u32,
         new_page: u32,
     ) -> Result<(), hal::flc::FlashError> {
-
         channel_map.map.insert(channel_id, new_page);
         self.write_channel_map(channel_map)?;
 
@@ -466,7 +470,7 @@ impl Board {
     }
     pub fn lockdown(&mut self) {
         self.delay.delay_ms(3000);
-        let addr = SAFETY_LOCATION;
+        let addr = SAFETY_LOCATION_PAGE;
         unsafe {
             self.flc
                 .erase_page(addr)
@@ -477,6 +481,10 @@ impl Board {
         self.delay.delay_ms(3000);
         self.led_pins.led_r.set_low();
         self.delay.delay_ms(3000);
+    }
+
+    pub fn gen_u32_trng(&mut self) -> u32 {
+        self.trng.gen_u32()
     }
 }
 

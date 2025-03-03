@@ -140,7 +140,7 @@ fn subscribe(
                         .expect("failed to erase page");
                     // TODO: might need delay here
                 }
-
+                board.delay.delay_ms(10);
                 old_address
             };
 
