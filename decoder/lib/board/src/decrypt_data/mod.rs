@@ -42,7 +42,7 @@ pub fn decrypt_sub(
     let offset = SIGNATURE_BYTES;
     let hmac_received = &encrypted_sub[offset..offset + HMAC_BYTES];
 
-    let mut hmac = HmacSha::new_from_slice(&key).expect("HMac from Sha failed lil bro");
+    let mut hmac = HmacSha::new_from_slice(&key).expect("HMac from Sha failed");
 
     hmac.update(&encrypted_sub[offset + HMAC_BYTES..]);
     let result = hmac.finalize();
@@ -76,7 +76,7 @@ pub fn decrypt_sub(
 
     let decrypted_data = decryptor
         .decrypt_padded_vec_mut::<NoPadding>(ciphertext)
-        .expect("Data decryption failed in decrypt sub bro");
+        .expect("Data decryption failed in decrypt sub");
 
     let length_bytes: [u8; 8] = decrypted_data[0..8].try_into().unwrap();
     let device_id_bytes: [u8; 4] = decrypted_data[8..12].try_into().unwrap();

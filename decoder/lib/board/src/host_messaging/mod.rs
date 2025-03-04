@@ -3,13 +3,7 @@ use core::panic;
 
 use super::Board;
 use crate::{CHANNEL_ID_BYTES, MAX_NUM_CHANNELS, TIMESTAMP_BYTES, parse_packet::FRAME_PACKET_SIZE};
-// TODO: Remove this
-use max7800x_hal::{
-    self as hal,
-    gpio::Af1,
-    pac::{Uart0},
-    uart::BuiltUartPeripheral,
-};
+use max7800x_hal::{self as hal, gpio::Af1, pac::Uart0, uart::BuiltUartPeripheral};
 
 pub const MAGIC: u8 = b'%';
 pub const ACK_PACKET: [u8; 4] = [b'%', b'A', 0x00, 0x00];
@@ -90,7 +84,7 @@ pub fn read_ack(board: &mut Board) -> bool {
 pub fn write_decoded_packet(board: &mut Board, data: &[u8]) {
     let length = data.len();
     if length > ACK_LENGTH {
-        panic!("Ack length panic cup");
+        panic!("Ack length panic");
     }
     let header = Header {
         opcode: Opcode::Decode,
@@ -103,7 +97,7 @@ pub fn write_decoded_packet(board: &mut Board, data: &[u8]) {
             return;
         }
     }
-    panic!("write decoded packet panic cup");
+    panic!("write decoded packet panic");
 }
 
 pub fn send_debug_message(board: &mut Board, message: &str) {
@@ -160,7 +154,7 @@ pub fn send_error_message(board: &mut Board, message: &str) {
 
 pub fn read_frame_packet(board: &mut Board, header: &Header, data: &mut [u8; FRAME_PACKET_SIZE]) {
     if header.length as usize != data.len() {
-        panic!("Read frame packet header length cup");
+        panic!("Read frame packet header length");
     }
     board.console.write_bytes(&ACK_PACKET);
     for byte in data {
@@ -201,7 +195,7 @@ pub fn succesful_subscription(board: &mut Board) {
     if read_ack(board) {
         return;
     }
-    panic!("successful subscription panic cup");
+    panic!("successful subscription panic");
 }
 
 pub fn list_subscriptions(board: &mut Board) {
@@ -222,5 +216,5 @@ pub fn list_subscriptions(board: &mut Board) {
             return;
         }
     }
-    panic!("List subscription panic cup");
+    panic!("List subscription panic");
 }

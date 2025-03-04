@@ -34,7 +34,7 @@ static mut HEAP_MEM: [core::mem::MaybeUninit<u8>; HEAP_SIZE] =
 
 #[entry]
 fn main() -> ! {
-    //initializing heap
+    // initializing heap
     unsafe {
         HEAP.init(
             core::ptr::addr_of_mut!(HEAP_MEM).cast::<u8>() as usize,
@@ -42,12 +42,12 @@ fn main() -> ! {
         );
     }
 
-    //initializing board
+    // initializing board
     let mut board = Board::new();
 
-    board.random_delay(250, 350); //Random Delay
+    board.random_delay(250, 350);
 
-    //is lockdown bit set?
+    // is lockdown bit set?
     let lockdown_bit = board.is_safety_bit_set();
     board.delay.delay_ms(50);
 
@@ -56,12 +56,11 @@ fn main() -> ! {
     }
     board.delay.delay_ms(50);
 
-    //which page is mapped to which page?
     let mut channel_map = board.read_channel_map().unwrap_or(ChannelFlashMap {
         map: BTreeMap::new(),
     });
 
-    board.random_delay(500, 300); //Random Delay
+    board.random_delay(500, 300);
 
     // Retrieve all the subscriptions from flash and decrypt them
     for (&_channel_id, &page_addr) in channel_map.map.iter() {
@@ -74,11 +73,11 @@ fn main() -> ! {
             // Decrypt the subscription and subscribe again to the file
             decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU)
                 .map(|subscription| {
-                    board.random_delay(150, 100); //Random Delay
+                    board.random_delay(150, 100);
 
                     board.subscriptions.add_subscription(subscription);
                 })
-                .expect("couldn't decrypt stored subscription lmao");
+                .expect("couldn't decrypt stored subscription");
         }
     }
 
@@ -118,17 +117,12 @@ fn subscribe(
     channel_map: &mut ChannelFlashMap,
 ) -> Result<(), FlashError> {
     let mut data = [0u8; MAX_SUBSCRIPTION_BYTES];
-    // board::host_messaging::send_debug_message(board, "b1");
-    // board.delay.delay_ms(1);
-    // unsafe {
-    //     asm!("nop");
-    // }
     let length = header.length;
     board::host_messaging::subscription_update(board, header, &mut data[0..length as usize]);
 
-    // Attempt decryption of the subscription
     let key = get_key("Ks").expect("Ks fetch for subscribe failed");
 
+    // Attempt decryption of the subscription
     decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU)
         .map(|subscription| {
             let channel_id = subscription.channel;
@@ -140,30 +134,16 @@ fn subscribe(
                     .find_available_page(&channel_map)
                     .expect("find available page didnt work");
 
-                // board.random_delay(200, 300); //Random Delay
-
                 new_address
             } else {
                 let &old_address = channel_map
                     .map
                     .get(&channel_id)
                     .expect("Weird; check says it should exist.");
-                // unsafe {
-                //     board
-                //         .flc
-                //         .erase_page(old_address)
-                //         .expect("failed to erase page");
-                // }
-                //
-                // board.random_delay(100, 500); //Random Delay
 
                 old_address
             };
 
-            // Write the subscription to the assigned page in flash
-
-            // board::host_messaging::send_debug_message(board, "b6");
-            // board.random_delay(175, 325); //Random Delay            host_messaging::send_debug_message(board, "b1");
             board
                 .write_sub_to_flash(address, &mut data[0..length as usize])
                 .expect("Failed to write to flash");
@@ -173,12 +153,11 @@ fn subscribe(
                 .assign_page_for_subscription(channel_map, channel_id, address)
                 .expect("page assignment failed");
 
-            // board::host_messaging::send_debug_message(board, "b8");
             host_messaging::succesful_subscription(board);
         })
         .expect("Whole of decrypt sub itself failed");
 
-    board.random_delay(10, 10); //Random Delay
+    board.random_delay(10, 10);
 
     Ok(())
 }
@@ -195,22 +174,10 @@ fn decode(
 
     let mut frame_data = [0u8; 189];
     board::host_messaging::read_frame_packet(board, header, &mut frame_data);
-    // host_messaging::send_debug_message(board, "gonna enter parse packet\r\n");
 
     let packet = parse_packet(&frame_data);
 
-    // host_messaging::send_debug_message(board, "finished parse_packet\r\n");
     let mut sub_index = None;
-    // board.delay.delay_ms(50);
-
-    // host_messaging::send_debug_message(
-    //     board,
-    //     &alloc::format!(
-    //         "timestamp: {}, most recent: {:?}",
-    //         packet.timestamp,
-    //         most_recent_timestamp
-    //     ),
-    // );
     board.random_delay(5, 5);
     if let Some(rec) = most_recent_timestamp {
         if packet.timestamp <= *rec {
@@ -219,8 +186,6 @@ fn decode(
         }
     }
     *most_recent_timestamp = Some(packet.timestamp);
-
-    // host_messaging::send_debug_message(board, "after most_recent_timestamp");
 
     let key: [u8; 32] = if packet.channel_id == 0 {
         *get_key("K0").expect("Fetching K0 failed")
@@ -237,55 +202,37 @@ fn decode(
             }
         }
 
-        // host_messaging::send_debug_message(board, "after sub_index");
-        // host_messaging::send_debug_message(board, &alloc::format!("after sub_index check, sub_index = {:?}", sub_index));
-
         if sub_index.is_none() {
             host_messaging::send_error_message(board, "No subscription found.");
             return Err(FlashError::InvalidAddress);
         }
 
-        // host_messaging::send_debug_message(board, "after sub_index check");
-
         let sub = &board.subscriptions.subscriptions
             [sub_index.expect("should ideally be impossible but yeah") as usize];
 
-        // host_messaging::send_debug_message_simpl(&mut board.console, "after indexing");
-
         let sub = sub.as_ref();
 
-        // host_messaging::send_debug_message_simpl(&mut board.console, "after as_ref");
-
         let sub = sub.expect("again, should be impossible");
-
-        // host_messaging::send_debug_message_simpl(&mut board.console, "will it happen");
 
         if packet.timestamp < sub.start || packet.timestamp > sub.end {
             host_messaging::send_error_message(board, "Timestamp out of bounds.");
             return Err(FlashError::InvalidAddress);
         }
 
-        // host_messaging::send_debug_message_simpl(&mut board.console, "will it happen pt 2");
-
         let key = &sub.kdf.derive(packet.timestamp);
-        // host_messaging::send_debug_message_simpl(&mut board.console, &alloc::format!("{:?}", key));
 
-        board.random_delay(5, 5); //Random Delay
+        board.random_delay(5, 5);
 
         let mut hasher = Sha3_256::new();
         hasher.update(&key.unwrap());
         hasher.finalize().as_slice().try_into().unwrap()
     };
-    // host_messaging::send_debug_message_simpl(&mut board.console, "will it happen pt 3");
-    // host_messaging::send_debug_message(board, "before hmac");
     let mut hmac = HmacSha::new_from_slice(&key).expect("can't create HMAC from key");
-    // host_messaging::send_debug_message(board, "after hmac");
     hmac.update(&frame_data[..93]);
     let result = hmac.finalize().into_bytes();
 
     let mut comparison = 0;
     for byte_tuple in result.iter().zip(&frame_data[93..125]) {
-        // host_messaging::send_debug_message(&mut board, "HMAC FAILED NOW");
         comparison |= byte_tuple.0 ^ byte_tuple.1;
     }
 

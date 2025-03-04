@@ -31,7 +31,6 @@ pub const SAFETY_PAGE: u32 = 0x10030000;
 pub const PAGE_SIZE: u32 = 8192;
 pub const MAX_SUBSCRIPTION_BYTES: usize = 5288;
 
-//Led Pins Struct
 struct LedPins {
     led_r: hal::gpio::Pin<2, 0, InputOutput>,
 }
@@ -39,7 +38,7 @@ struct LedPins {
 pub struct Board {
     pub delay: cortex_m::delay::Delay,
     pub console:
-        BuiltUartPeripheral<Uart0, hal::gpio::Pin<0, 0, Af1>, hal::gpio::Pin<0, 1, Af1>, (), ()>, // flc: hal::flc::Flc,
+        BuiltUartPeripheral<Uart0, hal::gpio::Pin<0, 0, Af1>, hal::gpio::Pin<0, 1, Af1>, (), ()>,
     pub flc: hal::flc::Flc,
     led_pins: LedPins,
     pub subscriptions: Subscriptions,
@@ -233,14 +232,14 @@ unsafe impl Sync for Board {}
 
 impl Board {
     pub fn new() -> Self {
-        //Take ownership of the MAX78000 peripherals
+        // Take ownership of the MAX78000 peripherals
         let peripherals: Peripherals = Peripherals::take().unwrap();
         let core = pac::CorePeripherals::take().unwrap();
 
-        //constrain the Global Control Register (GCR) Peripheral
+        // constrain the Global Control Register (GCR) Peripheral
         let mut gcr = hal::gcr::Gcr::new(peripherals.gcr, peripherals.lpgcr);
 
-        //Initialize the Internap Primary Oscillator (IPO)
+        // Initialize the Internal Primary Oscillator (IPO)
         let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
         let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
         let delay = cortex_m::delay::Delay::new(core.SYST, clks.sys_clk.frequency);
@@ -251,7 +250,7 @@ impl Board {
         let rx_pin = gpio0_pins.p0_0.into_af1();
         let tx_pin = gpio0_pins.p0_1.into_af1();
 
-        //initializing the console
+        // initializing the console
         let console =
             hal::uart::UartPeripheral::uart0(peripherals.uart0, &mut gcr.reg, rx_pin, tx_pin)
                 .baud(115200)
@@ -306,8 +305,8 @@ impl Board {
         address: u32,
         data: &[u8],
     ) -> Result<(), hal::flc::FlashError> {
-        let data_length = data.len() as u32; // Get the length of data
-        let max_size = MAX_SUBSCRIPTION_BYTES; // Maximum size of a subscription
+        let data_length = data.len() as u32;
+        let max_size = MAX_SUBSCRIPTION_BYTES;
 
         if data_length > max_size as u32 {
             return Err(hal::flc::FlashError::NeedsErase);
@@ -411,7 +410,7 @@ impl Board {
         &mut self,
         channel_map: &ChannelFlashMap,
     ) -> Result<(), hal::flc::FlashError> {
-        let dict_addr = LOOKUP_TABLE_LOCATION; // TODO:finalise the page/location in the memory
+        let dict_addr = LOOKUP_TABLE_LOCATION;
         let page_size = PAGE_SIZE;
 
         let serialized_data =
@@ -429,7 +428,7 @@ impl Board {
 
         self.flc.write_32(dict_addr, data_len)?;
 
-        let dict_addr_new = dict_addr + 4; // Moved past the size of the data
+        let dict_addr_new = dict_addr + 4;
         for (i, chunk) in serialized_data.chunks(16).enumerate() {
             let addr = dict_addr_new + (i * 16) as u32;
             let mut padded_chunk = [0xFFu8; 16];
@@ -522,7 +521,7 @@ fn panic_handler(info: &PanicInfo) -> ! {
     let core: pac::CorePeripherals = unsafe { pac::CorePeripherals::steal() };
 
     let mut gcr = hal::gcr::Gcr::new(peripherals.gcr, peripherals.lpgcr);
-    //Initialize the Internap Primary Oscillator (IPO)
+    // Initialize the Internal Primary Oscillator (IPO)
     let ipo = hal::gcr::clocks::Ipo::new(gcr.osc_guards.ipo).enable(&mut gcr.reg);
     let clks = gcr.sys_clk.set_source(&mut gcr.reg, &ipo).freeze();
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clks.sys_clk.frequency);
@@ -542,7 +541,7 @@ fn panic_handler(info: &PanicInfo) -> ! {
 
     let flc = hal::flc::Flc::new(peripherals.flc, clks.sys_clk);
 
-    //initializing the console
+    // initializing the console
     let console = hal::uart::UartPeripheral::uart0(peripherals.uart0, &mut gcr.reg, rx_pin, tx_pin)
         .baud(115200)
         .clock_pclk(&clks.pclk)
