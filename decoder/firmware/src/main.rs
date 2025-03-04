@@ -20,6 +20,7 @@ use board::host_messaging;
 use board::parse_packet::parse_packet;
 use board::Board;
 use board::ChannelFlashMap;
+use core::arch::asm;
 use hal::entry;
 use hal::flc::FlashError;
 use max7800x_hal as hal;
@@ -122,16 +123,25 @@ fn subscribe(
 ) -> Result<(), FlashError> {
     let mut data = [0u8; MAX_SUBSCRIPTION_SIZE];
     let length = header.length.clone();
-    board::host_messaging::subscription_update(board, header, &mut data[0..length as usize]);
+    // board::host_messaging::send_debug_message(board, "b1");
+    // board.delay.delay_ms(1);
+    unsafe {
+        asm!("nop");
+    }
+    // board::host_messaging::subscription_update(board, header, &mut data[0..length as usize]);
+    // board::host_messaging::send_debug_message(board, "b2");
 
     // Attempt decryption of the subscription
     let key = get_key("Ks").expect("Ks fetch for subscribe failed");
+    // board::host_messaging::send_debug_message(board, "b3");
 
     decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU, board)
         .map(|subscription| {
             let channel_id = subscription.channel;
+            // board::host_messaging::send_debug_message(board, "b4");
             let is_new = board.subscriptions.add_subscription(subscription);
 
+            // board::host_messaging::send_debug_message(board, "b5");
             let address = if is_new {
                 // Find a new available page for the subscription update
                 let new_address = board
@@ -161,16 +171,19 @@ fn subscribe(
 
             // Write the subscription to the assigned page in flash
 
+            // board::host_messaging::send_debug_message(board, "b6");
             // board.random_delay(175, 325); //Random Delay            host_messaging::send_debug_message(board, "b1");
             board
                 .write_sub_to_flash(address, &mut data[0..length as usize])
                 .expect("Failed to write to flash");
 
+            // board::host_messaging::send_debug_message(board, "b7");
             // Rewriting the subscription flash map dictionary
             board
                 .assign_page_for_subscription(channel_map, channel_id, address)
                 .expect("page assignment failed");
 
+            // board::host_messaging::send_debug_message(board, "b8");
             host_messaging::succesful_subscription(board);
         })
         .expect("Whole of decrypt sub itself failed");

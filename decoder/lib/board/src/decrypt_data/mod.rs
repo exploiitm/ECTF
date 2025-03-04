@@ -8,8 +8,9 @@ type HmacSha = Hmac<Sha3_256>;
 use ed25519_dalek::Signature;
 use ed25519_dalek::{Verifier, VerifyingKey};
 
-use crate::Board;
 use crate::Subscription;
+use crate::{Board, host_messaging};
+use alloc::format;
 
 pub fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16], buf: &mut [u8; 64]) {
     let data = Aes256CbcDec::new(GenericArray::from_slice(key), GenericArray::from_slice(iv))

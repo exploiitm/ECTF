@@ -27,4 +27,4 @@ RUN rustup target add thumbv7em-none-eabihf
 WORKDIR /decoder
 
 
-ENTRYPOINT ["bash", "-c", "make release DECODER_ID=${DECODER_ID} && cp build/max78000.bin /out"]
+ENTRYPOINT ["bash", "-c", "make release DECODER_ID=${DECODER_ID} && cp build/max78000.bin /out && cp build/max78000.elf /out"]
