@@ -4,14 +4,17 @@
 extern crate alloc;
 use crate::alloc::collections::BTreeMap;
 
-use board::MAX_SUBSCRIPTION_SIZE;
+use board::MAX_SUBSCRIPTION_BYTES;
 use ed25519_dalek::ed25519::signature;
 use ed25519_dalek::Signature;
 use ed25519_dalek::SigningKey;
 use ed25519_dalek::{Verifier, VerifyingKey};
 use embedded_alloc::LlffHeap as Heap;
 use hmac::{Hmac, Mac};
-use sha3::{digest::generic_array::GenericArray, {Digest, Sha3_256}};
+use sha3::{
+    digest::generic_array::GenericArray,
+    {Digest, Sha3_256},
+};
 type HmacSha = Hmac<Sha3_256>;
 use embedded_io::Write;
 
@@ -69,20 +72,26 @@ fn main() -> ! {
 
     // Retrieve all the subscriptions from flash and decrypt them
     for (&_channel_id, &page_addr) in channel_map.map.iter() {
-        let mut data = [0u8; MAX_SUBSCRIPTION_SIZE];
+        let mut data = [0u8; MAX_SUBSCRIPTION_BYTES];
 
         // Read each sub from flash
         if let Ok(length) = board.read_sub_from_flash(page_addr, &mut data) {
             let key = get_key("Ks").expect("Fetching Ks in main for channel from flash failed");
 
             // Decrypt the subscription and subscribe again to the file
-            decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU, &mut board)
-                .map(|subscription| {
-                    board.random_delay(150, 100); //Random Delay
+            decrypt_data::decrypt_sub(
+                &mut data[0..length as usize],
+                *key,
+                DECODER_ID,
+                &KPU,
+                &mut board,
+            )
+            .map(|subscription| {
+                board.random_delay(150, 100); //Random Delay
 
-                    board.subscriptions.add_subscription(subscription);
-                })
-                .expect("couldn't decrypt stored subscription lmao");
+                board.subscriptions.add_subscription(subscription);
+            })
+            .expect("couldn't decrypt stored subscription lmao");
         }
     }
 
@@ -121,27 +130,27 @@ fn subscribe(
     board: &mut Board,
     channel_map: &mut ChannelFlashMap,
 ) -> Result<(), FlashError> {
-    let mut data = [0u8; MAX_SUBSCRIPTION_SIZE];
-    let length = header.length.clone();
+    let mut data = [0u8; MAX_SUBSCRIPTION_BYTES];
     // board::host_messaging::send_debug_message(board, "b1");
     // board.delay.delay_ms(1);
-    unsafe {
-        asm!("nop");
-    }
-    // board::host_messaging::subscription_update(board, header, &mut data[0..length as usize]);
-    // board::host_messaging::send_debug_message(board, "b2");
+    // unsafe {
+    //     asm!("nop");
+    // }
+    let length = header.length;
+    board::host_messaging::subscription_update(board, header, &mut data[0..length as usize]);
+    board::host_messaging::send_debug_message(board, "b2");
 
     // Attempt decryption of the subscription
     let key = get_key("Ks").expect("Ks fetch for subscribe failed");
-    // board::host_messaging::send_debug_message(board, "b3");
+    board::host_messaging::send_debug_message(board, "b3");
 
     decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU, board)
         .map(|subscription| {
             let channel_id = subscription.channel;
-            // board::host_messaging::send_debug_message(board, "b4");
+            board::host_messaging::send_debug_message(board, "b4");
             let is_new = board.subscriptions.add_subscription(subscription);
 
-            // board::host_messaging::send_debug_message(board, "b5");
+            board::host_messaging::send_debug_message(board, "b5");
             let address = if is_new {
                 // Find a new available page for the subscription update
                 let new_address = board
@@ -177,7 +186,7 @@ fn subscribe(
                 .write_sub_to_flash(address, &mut data[0..length as usize])
                 .expect("Failed to write to flash");
 
-            // board::host_messaging::send_debug_message(board, "b7");
+            board::host_messaging::send_debug_message(board, "b7");
             // Rewriting the subscription flash map dictionary
             board
                 .assign_page_for_subscription(channel_map, channel_id, address)

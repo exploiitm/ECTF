@@ -8,6 +8,7 @@ use host_messaging::DEBUG_HEADER;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
 
+use alloc::format;
 use max7800x_hal::{
     self as hal,
     gpio::{Af1, InputOutput},
@@ -18,18 +19,18 @@ use segtree_kdf::{self, KEY_SIZE, Key, KeyHasher};
 
 pub mod parse_packet;
 
-pub const CHANNEL_ID_SIZE: usize = 4;
-pub const TIMESTAMP_SIZE: usize = 8;
+pub const CHANNEL_ID_BYTES: usize = 4;
+pub const TIMESTAMP_BYTES: usize = 8;
 pub const MAX_NUM_CHANNELS: usize = 8;
-pub const KEY_LENGTH: usize = KEY_SIZE;
-pub const NODE_SIZE: usize = 8;
+pub const KEY_BYTES: usize = KEY_SIZE;
+pub const NUM_NODES_BYTES: usize = 8;
 
 pub const LOOKUP_TABLE_LOCATION: u32 = 0x10032000;
 pub const CHANNEL_PAGE_START: u32 = 0x10034000;
 pub const SAFETY_LOCATION: u32 = 0x10030f88;
 pub const SAFETY_PAGE: u32 = 0x10030000;
 pub const PAGE_SIZE: u32 = 8192;
-pub const MAX_SUBSCRIPTION_SIZE: usize = 5224;
+pub const MAX_SUBSCRIPTION_BYTES: usize = 5288;
 
 //Led Pins Struct
 struct LedPins {
@@ -116,24 +117,26 @@ pub struct Subscriptions {
 }
 
 impl Subscription {
-    pub fn new(channel: u32, start: u64, end: u64, keys: &[u8]) -> Self {
-        let num_nodes_bytes = keys[0..NODE_SIZE]
+    pub fn new(channel: u32, start: u64, end: u64, keys: &[u8], board: &mut Board) -> Self {
+        host_messaging::send_debug_message(board, "nigga penis");
+        let num_nodes_bytes = keys[0..NUM_NODES_BYTES]
             .try_into()
-            .expect("keys.try_into failed in Subscription::new");
+            .expect("keys.try_into failed for num_nodes");
         let num_nodes = u64::from_le_bytes(num_nodes_bytes) as usize;
-        let keys = &keys[NODE_SIZE..];
+        host_messaging::send_debug_message(board, &format!("found {} nodes", num_nodes));
 
+        let keys = &keys[NUM_NODES_BYTES..];
         let mut cover: [Option<segtree_kdf::Node>; segtree_kdf::MAX_COVER_SIZE] =
             array::from_fn(|_| None);
 
         for i in 0..num_nodes {
-            let id_bytes = keys[i * (KEY_LENGTH + TIMESTAMP_SIZE)
-                ..i * (KEY_LENGTH + TIMESTAMP_SIZE) + TIMESTAMP_SIZE]
+            let this_offset = i * (KEY_BYTES + TIMESTAMP_BYTES);
+            let id_bytes = keys[this_offset..this_offset + TIMESTAMP_BYTES]
                 .try_into()
                 .expect("id_bytes from keys failed for a particular iteration");
             let id = u64::from_le_bytes(id_bytes);
-            let key_bytes = &keys[i * (KEY_LENGTH + TIMESTAMP_SIZE) + TIMESTAMP_SIZE
-                ..(i + 1) * (KEY_LENGTH + TIMESTAMP_SIZE)];
+            let key_bytes =
+                &keys[this_offset + TIMESTAMP_BYTES..this_offset + TIMESTAMP_BYTES + KEY_BYTES];
             let node = segtree_kdf::Node {
                 id,
                 key: key_bytes
@@ -142,24 +145,37 @@ impl Subscription {
             };
             cover[i] = Some(node);
         }
+        let leaves_offset = num_nodes * (KEY_BYTES + TIMESTAMP_BYTES);
+        let keys = &keys[leaves_offset..];
 
         let mut last_layer: [Option<segtree_kdf::Node>; 2] = array::from_fn(|_| None);
-        let num_leaves = keys.len() / (KEY_LENGTH + TIMESTAMP_SIZE) - num_nodes;
+        let num_leaves = keys[..NUM_NODES_BYTES]
+            .try_into()
+            .expect("keys.try_into failed for leaves_offset");
+        let num_leaves = u64::from_le_bytes(num_leaves) as usize;
+
+        let keys = &keys[NUM_NODES_BYTES..];
 
         for i in 0..num_leaves {
-            let id_bytes = keys[(num_nodes + i) * (KEY_LENGTH + TIMESTAMP_SIZE)
-                ..(num_nodes + i) * (KEY_LENGTH + TIMESTAMP_SIZE) + TIMESTAMP_SIZE]
+            let this_offset = i * (KEY_BYTES + TIMESTAMP_BYTES);
+            let id_bytes = keys[this_offset..this_offset + TIMESTAMP_BYTES]
                 .try_into()
                 .expect("Leaf ID died");
             let id = u64::from_le_bytes(id_bytes);
-            let key_bytes = keys[(num_nodes + i) * (KEY_LENGTH + TIMESTAMP_SIZE) + TIMESTAMP_SIZE
-                ..(num_nodes + i + 1) * (KEY_LENGTH + TIMESTAMP_SIZE)]
+            let key_bytes = keys
+                [this_offset + TIMESTAMP_BYTES..this_offset + TIMESTAMP_BYTES + KEY_BYTES]
                 .try_into()
                 .expect("Leaf key died");
             let node = segtree_kdf::Node { id, key: key_bytes };
             last_layer[i] = Some(node);
+            host_messaging::send_debug_message(
+                board,
+                &format!("{}/{} little niggers", i, num_leaves),
+            );
         }
+        host_messaging::send_debug_message(board, "cum fail");
         let kdf = segtree_kdf::SegtreeKDF::new(cover, last_layer);
+        host_messaging::send_debug_message(board, "coom");
 
         Subscription {
             channel,
@@ -204,14 +220,14 @@ impl Subscriptions {
         for sub in &self.subscriptions[0..num_channels as usize] {
             if let Some(sub) = sub {
                 let channel_id_bytes = sub.channel.to_le_bytes();
-                message[length..(length + CHANNEL_ID_SIZE)].copy_from_slice(&channel_id_bytes);
-                length += CHANNEL_ID_SIZE;
+                message[length..(length + CHANNEL_ID_BYTES)].copy_from_slice(&channel_id_bytes);
+                length += CHANNEL_ID_BYTES;
                 let start_bytes = sub.start.to_le_bytes();
-                message[length..(length + TIMESTAMP_SIZE)].copy_from_slice(&start_bytes);
-                length += TIMESTAMP_SIZE;
+                message[length..(length + TIMESTAMP_BYTES)].copy_from_slice(&start_bytes);
+                length += TIMESTAMP_BYTES;
                 let end_bytes = sub.end.to_le_bytes();
-                message[length..(length + TIMESTAMP_SIZE)].copy_from_slice(&end_bytes);
-                length += TIMESTAMP_SIZE;
+                message[length..(length + TIMESTAMP_BYTES)].copy_from_slice(&end_bytes);
+                length += TIMESTAMP_BYTES;
             }
         }
         length as u8
@@ -300,7 +316,7 @@ impl Board {
         data: &[u8],
     ) -> Result<(), hal::flc::FlashError> {
         let data_length = data.len() as u32; // Get the length of data
-        let max_size = MAX_SUBSCRIPTION_SIZE; // Maximum size of a subscription
+        let max_size = MAX_SUBSCRIPTION_BYTES; // Maximum size of a subscription
 
         if data_length > max_size as u32 {
             return Err(hal::flc::FlashError::NeedsErase);
@@ -338,11 +354,11 @@ impl Board {
     pub fn read_sub_from_flash(
         &mut self,
         address: u32,
-        buffer: &mut [u8; MAX_SUBSCRIPTION_SIZE],
+        buffer: &mut [u8; MAX_SUBSCRIPTION_BYTES],
     ) -> Result<u32, hal::flc::FlashError> {
         // Read the stored subscription size (first 4 bytes)
         let subscription_size = self.flc.read_32(address)?;
-        if subscription_size == 0xFFFFFFFF || subscription_size > MAX_SUBSCRIPTION_SIZE as u32 {
+        if subscription_size == 0xFFFFFFFF || subscription_size > MAX_SUBSCRIPTION_BYTES as u32 {
             return Err(hal::flc::FlashError::InvalidAddress);
         }
 
@@ -488,7 +504,7 @@ impl Board {
         self.delay.delay_ms(3000);
     }
 
-    pub fn gen_u32_trng(&mut self)  -> u32  {
+    pub fn gen_u32_trng(&mut self) -> u32 {
         self.trng.gen_u32()
     }
 

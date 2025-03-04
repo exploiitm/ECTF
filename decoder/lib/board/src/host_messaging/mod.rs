@@ -2,7 +2,7 @@ extern crate alloc;
 use core::panic;
 
 use super::Board;
-use crate::{CHANNEL_ID_SIZE, MAX_NUM_CHANNELS, TIMESTAMP_SIZE, parse_packet::FRAME_PACKET_SIZE};
+use crate::{CHANNEL_ID_BYTES, MAX_NUM_CHANNELS, TIMESTAMP_BYTES, parse_packet::FRAME_PACKET_SIZE};
 // TODO: Remove this
 use max7800x_hal::{
     self as hal,
@@ -208,7 +208,7 @@ pub fn succesful_subscription(board: &mut Board) {
 pub fn list_subscriptions(board: &mut Board) {
     board.console.write_bytes(&ACK_PACKET);
 
-    let mut msg = [0u8; 4 + (2 * TIMESTAMP_SIZE + CHANNEL_ID_SIZE) * MAX_NUM_CHANNELS];
+    let mut msg = [0u8; 4 + (2 * TIMESTAMP_BYTES + CHANNEL_ID_BYTES) * MAX_NUM_CHANNELS];
 
     let length = board.subscriptions.list_subscriptions(&mut msg);
     let list_header = Header {

@@ -15,20 +15,18 @@ from pathlib import Path
 
 from nacl.signing import SigningKey
 
-Bytes32 = Annotated[bytes, 32]
-
+KEY_LENGTH = 16
 
 @dataclass(init=True, repr=True)
 class Cover:
     nodes: List[[int, bytes]]
     leaves: List[[int, bytes]]
 
-
 def enc(input: bytes, key: bytes) -> bytes:
     hasher = hashlib.sha3_256()
     hasher.update(key)
     hasher.update(input)
-    return hasher.digest()
+    return hasher.digest()[:KEY_LENGTH]
 
 
 def enc_right(input: bytes) -> bytes:
@@ -39,7 +37,6 @@ def enc_right(input: bytes) -> bytes:
 def enc_left(input: bytes) -> bytes:
     key = struct.pack("<8I", *([0xC0D3D00D] * 8))
     return enc(input, key)
-
 
 def get_cover_wrapper(
     master: bytes, begin: int, end: int, depth: int
@@ -163,6 +160,8 @@ def gen_subscription(
         key_data += struct.pack("<Q", index)
         key_data += key
 
+    key_data += struct.pack("<Q", len(keys.leaves))
+
     for index, key in keys.leaves:
         key_data += struct.pack("<Q", index)
         key_data += key
@@ -196,13 +195,15 @@ def gen_subscription(
 
     mac = hmac.new(K10, iv + subscription_data_encrypted,
                    hashlib.sha3_256).digest()
-    
+
     private_key = SigningKey(bytes.fromhex(global_secrets["Kpr"]))
-    sign = private_key.sign(iv + subscription_data_encrypted + mac).signature
-    
+    sign = private_key.sign(mac + iv + subscription_data_encrypted).signature
+
     # Returning for verification if needed
     print(f"here is length{len(iv+subscription_data_encrypted + mac + sign)}")
-    return iv+subscription_data_encrypted + mac + sign
+    # print(repr(subscription_data_encrypted))
+    print(repr(sign))
+    return sign + mac + iv + subscription_data_encrypted
 
 
 def parse_args():
