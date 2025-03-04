@@ -162,13 +162,13 @@ fn subscribe(
                     .map
                     .get(&channel_id)
                     .expect("Weird; check says it should exist.");
-                unsafe {
-                    board
-                        .flc
-                        .erase_page(old_address)
-                        .expect("failed to erase page");
-                }
-
+                // unsafe {
+                //     board
+                //         .flc
+                //         .erase_page(old_address)
+                //         .expect("failed to erase page");
+                // }
+                //
                 // board.random_delay(100, 500); //Random Delay
 
                 old_address
