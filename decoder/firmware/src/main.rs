@@ -138,19 +138,15 @@ fn subscribe(
     // }
     let length = header.length;
     board::host_messaging::subscription_update(board, header, &mut data[0..length as usize]);
-    board::host_messaging::send_debug_message(board, "b2");
 
     // Attempt decryption of the subscription
     let key = get_key("Ks").expect("Ks fetch for subscribe failed");
-    board::host_messaging::send_debug_message(board, "b3");
 
     decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU, board)
         .map(|subscription| {
             let channel_id = subscription.channel;
-            board::host_messaging::send_debug_message(board, "b4");
             let is_new = board.subscriptions.add_subscription(subscription);
 
-            board::host_messaging::send_debug_message(board, "b5");
             let address = if is_new {
                 // Find a new available page for the subscription update
                 let new_address = board
@@ -170,7 +166,6 @@ fn subscribe(
                         .flc
                         .erase_page(old_address)
                         .expect("failed to erase page");
-                    // TODO: might need delay here
                 }
 
                 // board.random_delay(100, 500); //Random Delay
@@ -186,7 +181,6 @@ fn subscribe(
                 .write_sub_to_flash(address, &mut data[0..length as usize])
                 .expect("Failed to write to flash");
 
-            board::host_messaging::send_debug_message(board, "b7");
             // Rewriting the subscription flash map dictionary
             board
                 .assign_page_for_subscription(channel_map, channel_id, address)
@@ -197,7 +191,7 @@ fn subscribe(
         })
         .expect("Whole of decrypt sub itself failed");
 
-    board.random_delay(295, 185); //Random Delay
+    board.random_delay(10, 10); //Random Delay
 
     Ok(())
 }
@@ -230,7 +224,7 @@ fn decode(
     //         most_recent_timestamp
     //     ),
     // );
-    board.random_delay(100, 200);
+    board.random_delay(10, 20);
     if let Some(rec) = most_recent_timestamp {
         if packet.timestamp <= *rec {
             host_messaging::send_error_message(board, "Timestamp reversion.");
@@ -289,7 +283,7 @@ fn decode(
         let key = &sub.kdf.derive(packet.timestamp);
         // host_messaging::send_debug_message_simpl(&mut board.console, &alloc::format!("{:?}", key));
 
-        board.random_delay(225, 400); //Random Delay
+        board.random_delay(10, 40); //Random Delay
 
         let mut hasher = Sha3_256::new();
         hasher.update(&key.unwrap());

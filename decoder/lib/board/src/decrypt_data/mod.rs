@@ -32,11 +32,6 @@ pub fn decrypt_sub(
     pub_key: &[u8; 32],
     board: &mut Board,
 ) -> Option<Subscription> {
-    // //NOTE: sanity check: received sub
-    // host_messaging::send_debug_message(board, &format!("{:?}", encrypted_sub));
-
-    // host_messaging::send_debug_message(board, "debug succeeded");
-
     let signature_received = &encrypted_sub[..SIGNATURE_BYTES];
     let verifying_key =
         VerifyingKey::from_bytes(&pub_key).expect("Verifying key from bytes failed");
@@ -44,13 +39,10 @@ pub fn decrypt_sub(
         &encrypted_sub[SIGNATURE_BYTES..],
         &Signature::try_from(signature_received).unwrap(),
     );
-    host_messaging::send_debug_message(board, &format!("{:?}", encrypted_sub));
-    board.delay.delay_ms(1000);
-    board.random_delay(100, 100);
+    // board.delay.delay_ms(1);
     if let Err(_) = result {
         panic!("Signature verification failed in decrypt sub");
     }
-    host_messaging::send_debug_message(board, "signature verification succeeded");
 
     let offset = SIGNATURE_BYTES;
     let hmac_received = &encrypted_sub[offset..offset + HMAC_BYTES];
@@ -67,7 +59,6 @@ pub fn decrypt_sub(
         comparison |= byte_tuple.0 ^ byte_tuple.1;
     }
 
-    board.random_delay(100, 100);
     if comparison != 0 {
         panic!("HMAC failure in decrypt sub");
     }
@@ -88,12 +79,9 @@ pub fn decrypt_sub(
     let k10_new = GenericArray::from_slice(&key);
     let decryptor = Aes256CbcDec::new(k10_new, iv);
 
-    board.random_delay(100, 100);
     let decrypted_data = decryptor
         .decrypt_padded_vec_mut::<NoPadding>(ciphertext)
         .expect("Data decryption failed in decrypt sub bro");
-
-    host_messaging::send_debug_message(board, &format!("{:?}", decrypted_data));
 
     let length_bytes: [u8; 8] = decrypted_data[0..8].try_into().unwrap();
     let device_id_bytes: [u8; 4] = decrypted_data[8..12].try_into().unwrap();
@@ -106,19 +94,10 @@ pub fn decrypt_sub(
     let channel = u32::from_le_bytes(channel_bytes);
     let start = u64::from_le_bytes(start_bytes);
     let end = u64::from_le_bytes(end_bytes);
-    host_messaging::send_debug_message(
-        board,
-        &format!("decoder id received: {:x?}", device_id_received),
-    );
-    board.delay.delay_ms(100);
     if device_id != device_id_received {
         None
     } else {
-        host_messaging::send_debug_message(board, "nigga1");
-        board.delay.delay_ms(100);
         let subscription = Subscription::new(channel, start, end, key_data, board);
-        host_messaging::send_debug_message(board, "nigga2");
-        board.delay.delay_ms(100);
         Some(subscription)
     }
 }

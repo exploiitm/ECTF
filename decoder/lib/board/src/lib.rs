@@ -118,12 +118,10 @@ pub struct Subscriptions {
 
 impl Subscription {
     pub fn new(channel: u32, start: u64, end: u64, keys: &[u8], board: &mut Board) -> Self {
-        host_messaging::send_debug_message(board, "nigga penis");
         let num_nodes_bytes = keys[0..NUM_NODES_BYTES]
             .try_into()
             .expect("keys.try_into failed for num_nodes");
         let num_nodes = u64::from_le_bytes(num_nodes_bytes) as usize;
-        host_messaging::send_debug_message(board, &format!("found {} nodes", num_nodes));
 
         let keys = &keys[NUM_NODES_BYTES..];
         let mut cover: [Option<segtree_kdf::Node>; segtree_kdf::MAX_COVER_SIZE] =
@@ -168,14 +166,8 @@ impl Subscription {
                 .expect("Leaf key died");
             let node = segtree_kdf::Node { id, key: key_bytes };
             last_layer[i] = Some(node);
-            host_messaging::send_debug_message(
-                board,
-                &format!("{}/{} little niggers", i, num_leaves),
-            );
         }
-        host_messaging::send_debug_message(board, "cum fail");
         let kdf = segtree_kdf::SegtreeKDF::new(cover, last_layer);
-        host_messaging::send_debug_message(board, "coom");
 
         Subscription {
             channel,
