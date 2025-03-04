@@ -456,7 +456,7 @@ impl Board {
     ) -> Result<u32, hal::flc::FlashError> {
         let start_addr = CHANNEL_PAGE_START;
         let page_size = PAGE_SIZE;
-        let num_pages = 10;
+        let num_pages = 9;
 
         for i in 0..num_pages {
             let page_addr = start_addr + (i * page_size);

@@ -10,10 +10,14 @@ import hmac
 
 from nacl.signing import SigningKey
 
+ENCODER_DEPTH = 64
+KEY_LENGTH = 16
+
 # Type annotations for byte arrays of specific sizes
 Bytes64 = Annotated[bytes, 64]
 Bytes32 = Annotated[bytes, 32]
 Bytes4 = Annotated[bytes, 4]
+
 
 def jst_hash(data, key):
     hasher = hashlib.sha3_256()
@@ -31,14 +35,14 @@ def derive_right(parent_key: bytes) -> bytes:
     '''Derives the right segment key from the parent key'''
     right_key_seed = struct.pack(
         "<8I", *([0xDEADBEEF] * 8))  # Fixed right key seed
-    return hash_function(parent_key, right_key_seed)
+    return jst_hash(parent_key, right_key_seed)
 
 
 def derive_left(parent_key: bytes) -> bytes:
     '''Derives the left segment key from the parent key'''
     left_key_seed = struct.pack(
         "<8I", *([0xC0D3D00D] * 8))  # Fixed left key seed
-    return hash_function(parent_key, left_key_seed)
+    return jst_hash(parent_key, left_key_seed)
 
 
 def derive_key(master_key: bytes, timestamp: int) -> bytes:
@@ -110,8 +114,8 @@ class Encoder:
 
         # Generate HMAC signature using the same timestamp key
         signature_hmac = hmac.new(timestamp_key, packet_unsigned,
-                             hashlib.sha3_256).digest()
-        
+                                  hashlib.sha3_256).digest()
+
         packet_hmaced = packet_unsigned + signature_hmac
         signature_ecdsa = private_key.sign(packet_hmaced).signature
 
