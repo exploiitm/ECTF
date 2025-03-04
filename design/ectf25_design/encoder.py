@@ -90,7 +90,8 @@ class Encoder:
             # Retrieve the master key for the given channel
             master_key = bytes.fromhex(self.global_secrets["K" + str(channel)])
             # Generate a timestamp-specific key using hierarchical derivation
-            timestamp_key = derive_key(master_key, timestamp)
+            timestamp_key_raw = derive_key(master_key, timestamp)
+            timestamp_key = hashlib.sha3_256(timestamp_key_raw).digest()
 
         private_key = SigningKey(bytes.fromhex(self.global_secrets["Kpr"]))
 

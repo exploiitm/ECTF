@@ -4,6 +4,7 @@
 extern crate alloc;
 use crate::alloc::collections::BTreeMap;
 
+use board::host_messaging::send_debug_message;
 use board::MAX_SUBSCRIPTION_BYTES;
 use ed25519_dalek::ed25519::signature;
 use ed25519_dalek::Signature;
@@ -297,7 +298,7 @@ fn decode(
     let result = hmac.finalize().into_bytes();
 
     let mut comparison = 0;
-    for byte_tuple in result.iter().zip(&frame_data[93..]) {
+    for byte_tuple in result.iter().zip(&frame_data[93..125]) {
         // host_messaging::send_debug_message(&mut board, "HMAC FAILED NOW");
         comparison |= byte_tuple.0 ^ byte_tuple.1;
     }
