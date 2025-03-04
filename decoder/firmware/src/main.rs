@@ -225,7 +225,7 @@ fn decode(
     //         most_recent_timestamp
     //     ),
     // );
-    board.random_delay(10, 20);
+    board.random_delay(5, 5);
     if let Some(rec) = most_recent_timestamp {
         if packet.timestamp <= *rec {
             host_messaging::send_error_message(board, "Timestamp reversion.");
@@ -284,7 +284,7 @@ fn decode(
         let key = &sub.kdf.derive(packet.timestamp);
         // host_messaging::send_debug_message_simpl(&mut board.console, &alloc::format!("{:?}", key));
 
-        board.random_delay(10, 40); //Random Delay
+        board.random_delay(5, 5); //Random Delay
 
         let mut hasher = Sha3_256::new();
         hasher.update(&key.unwrap());
