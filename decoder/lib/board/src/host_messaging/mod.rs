@@ -6,8 +6,8 @@ use crate::{CHANNEL_ID_BYTES, MAX_NUM_CHANNELS, TIMESTAMP_BYTES, parse_packet::F
 // TODO: Remove this
 use max7800x_hal::{
     self as hal,
-    gpio::{Af1, InputOutput},
-    pac::{self, Peripherals, Uart0},
+    gpio::Af1,
+    pac::{Uart0},
     uart::BuiltUartPeripheral,
 };
 

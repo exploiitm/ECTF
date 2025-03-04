@@ -1,4 +1,3 @@
-use ed25519_dalek::ed25519::signature;
 
 pub const FRAME_PACKET_SIZE: usize = 189;
 

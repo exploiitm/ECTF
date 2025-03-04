@@ -9,8 +9,6 @@ use ed25519_dalek::Signature;
 use ed25519_dalek::{Verifier, VerifyingKey};
 
 use crate::Subscription;
-use crate::{Board, host_messaging};
-use alloc::format;
 
 const SIGNATURE_BYTES: usize = 64;
 const HMAC_BYTES: usize = 32;
@@ -25,12 +23,9 @@ pub fn decrypt_data(data_enc: &[u8; 64], key: &[u8; 32], iv: &[u8; 16], buf: &mu
 
 pub fn decrypt_sub(
     encrypted_sub: &[u8],
-
     key: [u8; 32],
-
     device_id: u32,
     pub_key: &[u8; 32],
-    board: &mut Board,
 ) -> Option<Subscription> {
     let signature_received = &encrypted_sub[..SIGNATURE_BYTES];
     let verifying_key =
@@ -97,7 +92,7 @@ pub fn decrypt_sub(
     if device_id != device_id_received {
         None
     } else {
-        let subscription = Subscription::new(channel, start, end, key_data, board);
+        let subscription = Subscription::new(channel, start, end, key_data);
         Some(subscription)
     }
 }

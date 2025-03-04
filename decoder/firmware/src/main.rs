@@ -4,27 +4,19 @@
 extern crate alloc;
 use crate::alloc::collections::BTreeMap;
 
-use board::host_messaging::send_debug_message;
 use board::MAX_SUBSCRIPTION_BYTES;
-use ed25519_dalek::ed25519::signature;
 use ed25519_dalek::Signature;
-use ed25519_dalek::SigningKey;
 use ed25519_dalek::{Verifier, VerifyingKey};
 use embedded_alloc::LlffHeap as Heap;
 use hmac::{Hmac, Mac};
-use sha3::{
-    digest::generic_array::GenericArray,
-    {Digest, Sha3_256},
-};
+use sha3::{Digest, Sha3_256};
 type HmacSha = Hmac<Sha3_256>;
-use embedded_io::Write;
 
 use board::decrypt_data;
 use board::host_messaging;
 use board::parse_packet::parse_packet;
 use board::Board;
 use board::ChannelFlashMap;
-use core::arch::asm;
 use hal::entry;
 use hal::flc::FlashError;
 use max7800x_hal as hal;
@@ -80,19 +72,13 @@ fn main() -> ! {
             let key = get_key("Ks").expect("Fetching Ks in main for channel from flash failed");
 
             // Decrypt the subscription and subscribe again to the file
-            decrypt_data::decrypt_sub(
-                &mut data[0..length as usize],
-                *key,
-                DECODER_ID,
-                &KPU,
-                &mut board,
-            )
-            .map(|subscription| {
-                board.random_delay(150, 100); //Random Delay
+            decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU)
+                .map(|subscription| {
+                    board.random_delay(150, 100); //Random Delay
 
-                board.subscriptions.add_subscription(subscription);
-            })
-            .expect("couldn't decrypt stored subscription lmao");
+                    board.subscriptions.add_subscription(subscription);
+                })
+                .expect("couldn't decrypt stored subscription lmao");
         }
     }
 
@@ -143,7 +129,7 @@ fn subscribe(
     // Attempt decryption of the subscription
     let key = get_key("Ks").expect("Ks fetch for subscribe failed");
 
-    decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU, board)
+    decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU)
         .map(|subscription| {
             let channel_id = subscription.channel;
             let is_new = board.subscriptions.add_subscription(subscription);

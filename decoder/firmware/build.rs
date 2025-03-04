@@ -8,7 +8,6 @@ use std::path::PathBuf;
 
 use hex;
 use serde_json;
-use sha3::digest::generic_array::GenericArray;
 use sha3::{Digest, Sha3_256};
 
 fn main() {

@@ -8,7 +8,6 @@ use host_messaging::DEBUG_HEADER;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
 
-use alloc::format;
 use max7800x_hal::{
     self as hal,
     gpio::{Af1, InputOutput},
@@ -117,7 +116,7 @@ pub struct Subscriptions {
 }
 
 impl Subscription {
-    pub fn new(channel: u32, start: u64, end: u64, keys: &[u8], board: &mut Board) -> Self {
+    pub fn new(channel: u32, start: u64, end: u64, keys: &[u8]) -> Self {
         let num_nodes_bytes = keys[0..NUM_NODES_BYTES]
             .try_into()
             .expect("keys.try_into failed for num_nodes");
