@@ -1,6 +1,6 @@
 [package]
 name = "ectf"
-authors = ["Abhinav I S <abhinavis2005@gmail.com>", "S Kevin Kinsey <kevinkinsey2005@gmail.com>"]
+authors = ["Abhinav I S", "Kevin Kinsey" ,"Nithin Ken Maran", "Arivoli Ramamoorthy", "Sanjeev Subrahmaniyan", "Md. Isfarul Haque", "Mohitabinav", "Madhav Tadepalli", "Athish Pranav", "Nitin G"]
 edition = "2021"
 publish = false
 
@@ -32,6 +32,6 @@ serde_json = "1.0"
 hex = "0.4.3"
 sha3 = "0.10.8"
 
-# [profiles.release]
-# strip = "symbols"
+[profiles.release]
+strip = "symbols"
 
