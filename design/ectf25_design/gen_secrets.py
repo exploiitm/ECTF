@@ -5,6 +5,9 @@ from pathlib import Path
 from loguru import logger
 import secrets
 
+from nacl.signing import SigningKey
+from nacl.encoding import HexEncoder
+
 
 def gen_secrets(channels: list[int]) -> bytes:
     """Generate the contents secrets file
@@ -18,12 +21,18 @@ def gen_secrets(channels: list[int]) -> bytes:
 
     :returns: Contents of the secrets file
     """
-   
+    private_key = SigningKey.generate()
+
+    assert 0 not in channels, "Channel 0 (Emergency Broadcast) is automatically added"
+
     global_secrets = {}
     for chan_id in channels:
-        global_secrets[chan_id] = secrets.token_bytes(64).hex()
-        
-    global_secrets[-1] = secrets.token_bytes(64).hex()
+        global_secrets["K"+str(chan_id)] = secrets.token_bytes(16).hex()
+
+    global_secrets["K0"] = secrets.token_bytes(32).hex()
+    global_secrets["Ks"] = secrets.token_bytes(32).hex()
+    global_secrets["Kpr"] = private_key.encode(encoder=HexEncoder).decode()
+    global_secrets["Kpu"] = private_key.verify_key.encode(encoder=HexEncoder).decode()
 
     return json.dumps(global_secrets).encode('utf-8')
 
@@ -33,7 +42,8 @@ def gen_secrets(channels: list[int]) -> bytes:
 
 
 def parse_args():
-    """Define and parse the command line arguments
+    """
+    Define and parse the command line arguments
 
     NOTE: Your design must not change this function
     """
@@ -86,4 +96,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

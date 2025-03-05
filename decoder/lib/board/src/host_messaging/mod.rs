@@ -1,5 +1,15 @@
-const MAGIC: u8 = b'%';
-const ACK_PACKET: [u8; 4] = [b'%', b'A', 0x00, 0x00];
+extern crate alloc;
+use core::panic;
+
+use super::Board;
+use crate::{CHANNEL_ID_BYTES, MAX_NUM_CHANNELS, TIMESTAMP_BYTES, parse_packet::FRAME_PACKET_SIZE};
+
+pub const MAGIC: u8 = b'%';
+pub const ACK_PACKET: [u8; 4] = [b'%', b'A', 0x00, 0x00];
+pub const SUCCESFUL_SUBSCRIPTION: [u8; 4] = [b'%', b'S', 0x00, 0x00];
+pub const DEBUG_HEADER: [u8; 2] = [b'%', b'G'];
+pub const ERROR_MSG: [u8; 4] = [b'%', b'E', 0x00, 0x00];
+pub const ACK_LENGTH: usize = 256;
 
 pub enum Opcode {
     Decode,
@@ -23,18 +33,11 @@ impl Opcode {
     }
 }
 
-use crate::Subscription;
-
-use super::Board;
-extern crate alloc;
-use alloc::vec;
-use alloc::vec::Vec;
-use core::panic;
-
 pub struct Header {
     pub opcode: Opcode,
     pub length: u16,
 }
+
 impl Header {
     pub fn as_bytes(&self) -> [u8; 4] {
         let opcode = self.opcode.as_byte();
@@ -77,103 +80,119 @@ pub fn read_ack(board: &mut Board) -> bool {
     }
 }
 
-pub fn read_packet(board: &mut Board, length: u16) -> Vec<u8> {
-    if length > 256 {
-        panic!();
-    }
-
-    let mut data = vec![0; length as usize];
-    for i in 0..(length - 1) {
-        let byte = board.console.read_byte();
-        data[i as usize] = byte;
-    }
-
-    return data;
-}
-
 pub fn write_decoded_packet(board: &mut Board, data: &[u8]) {
-    //IDEALLY SHOULD NOT HAVE TO WRITE MORE THAN 256 BYTES?
-    let length = data.len() as u16;
-    if length > 256 {
-        panic!();
+    let length = data.len();
+    if length > ACK_LENGTH {
+        panic!("Ack length panic");
     }
     let header = Header {
         opcode: Opcode::Decode,
-        length,
+        length: length as u16,
     };
     board.console.write_bytes(&header.as_bytes());
     if read_ack(board) {
         board.console.write_bytes(data);
+        if read_ack(board) {
+            return;
+        }
+    }
+    panic!("write decoded packet panic");
+}
+
+// pub fn send_debug_message(board: &mut Board, message: &str) {
+//     let length = message.len() as u16;
+//     let header = Header {
+//         opcode: Opcode::Debug,
+//         length,
+//     };
+//     board.console.write_bytes(&header.as_bytes());
+//     board.console.write_bytes(message.as_bytes());
+// }
+//
+pub fn send_error_message(board: &mut Board, message: &str) {
+    let length = message.len() as u16;
+
+    // BRo you dont need that much length.
+    if length > 256 {
+        panic!("Message too large");
+    }
+
+    let header = Header {
+        opcode: Opcode::Error,
+        length,
+    };
+    board.console.write_bytes(&header.as_bytes());
+    if read_ack(board) {
+        board.console.write_bytes(message.as_bytes());
+        if read_ack(board) {
+            return;
+        }
+    }
+}
+
+pub fn read_frame_packet(board: &mut Board, header: &Header, data: &mut [u8; FRAME_PACKET_SIZE]) {
+    if header.length as usize != data.len() {
+        panic!("Read frame packet header length");
+    }
+    board.console.write_bytes(&ACK_PACKET);
+    for byte in data {
+        *byte = board.console.read_byte();
+    }
+    board.console.write_bytes(&ACK_PACKET);
+}
+pub fn subscription_update(board: &mut Board, header: &Header, sub_data: &mut [u8]) {
+    board.console.write_bytes(&ACK_PACKET);
+    let length = header.length;
+    let num_packets: usize = length.div_ceil(256) as usize;
+
+    //getting n-1 packets
+    for i in 0..(num_packets - 1) {
+        for j in 0..ACK_LENGTH {
+            let byte = board.console.read_byte();
+            sub_data[i * ACK_LENGTH + j] = byte;
+        }
+        board.console.write_bytes(&ACK_PACKET);
+    }
+
+    //getting last packet
+    let last_packet_size = if length as usize % ACK_LENGTH == 0 {
+        ACK_LENGTH
     } else {
-        panic!();
-    }
-}
+        length as usize % ACK_LENGTH
+    };
 
-pub fn decode(board: &mut Board, header: Header) {
+    for i in 0..(last_packet_size as usize) {
+        let byte = board.console.read_byte();
+        sub_data[(num_packets - 1) * ACK_LENGTH + i] = byte;
+    }
     board.console.write_bytes(&ACK_PACKET);
-    let length = header.length;
-    let num_packets: u16 = length / 256;
-
-    for _ in 0..num_packets {
-        let packet = read_packet(board, 256);
-        board.console.write_bytes(&ACK_PACKET);
-        //TODO :: DO WHAT YOU WILL WITH THESE PACKETS
-    }
-    if length % 256 != 0 {
-        let packet = read_packet(board, length % 256);
-        board.console.write_bytes(&ACK_PACKET);
-        //TODO :: DO WHAT YOU WILL DO WITH THESE PACKETS
-    }
-    //TODO call write_decoded_packet after decoding the packets.
-}
-pub fn subscription_update(board: &mut Board, header: Header) -> Subscription {
-    board.console.write_bytes(&ACK_PACKET);
-
-    let length = header.length;
-    let mut sub_data = vec![0; length as usize];
-
-    let num_packets: usize = (length / 256) as usize;
-    for i in 0..num_packets {
-        let packet = read_packet(board, 256);
-        board.console.write_bytes(&ACK_PACKET);
-        sub_data[i * 256..(i + 1) * 256].copy_from_slice(&packet);
-    }
-
-    if length % 256 != 0 {
-        let packet = read_packet(board, length % 256);
-        sub_data[num_packets * 256..].copy_from_slice(&packet);
-        board.console.write_bytes(&ACK_PACKET);
-    }
-
-    parse_subscriptions(&sub_data)
 }
 
-pub fn parse_subscriptions(_packed_sub: &[u8]) -> Subscription {
-    //TODO:: parse all the packets
-    todo!();
+pub fn succesful_subscription(board: &mut Board) {
+    board.console.write_bytes(&SUCCESFUL_SUBSCRIPTION);
+    if read_ack(board) {
+        return;
+    }
+    panic!("successful subscription panic");
 }
 
 pub fn list_subscriptions(board: &mut Board) {
     board.console.write_bytes(&ACK_PACKET);
-    //TODO :: implement how to get this msg
-    let msg: &[u8] = &[
-        0x02, 0x00, 0x00, 0x00, // Number of channels (2)
-        0x01, 0x00, 0x00, 0x00, // 1st channel ID (1)
-        0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Start timestamp (128)
-        0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // End timestamp (255)
-        0x04, 0x00, 0x00, 0x00, // 1st channel ID (4)
-        0x41, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Start timestamp (0x4141)
-        0x42, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // End timestamp (0x4242)
-    ];
 
+    let mut msg = [0u8; 4 + (2 * TIMESTAMP_BYTES + CHANNEL_ID_BYTES) * MAX_NUM_CHANNELS];
+
+    let length = board.subscriptions.list_subscriptions(&mut msg);
     let list_header = Header {
         opcode: Opcode::List,
-        length: msg.len() as u16,
+        length: length as u16,
     };
     board.console.write_bytes(&list_header.as_bytes());
+
     if read_ack(board) {
-        board.console.write_bytes(msg);
-    } else {
-        panic!();
+        board.console.write_bytes(&msg);
+        if read_ack(board) {
+            return;
+        }
     }
+    panic!("List subscription panic");
 }

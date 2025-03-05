@@ -142,28 +142,10 @@ pub struct BuiltUartPeripheral<UART, RX, TX, CTS, RTS> {
     _rts_pin: RTS,
 }
 
-// TODO
-// pub struct UartReceiver<UART, RX, CTS> {
-//     _uart: UART,
-//     _rx_pin: RX,
-//     _cts_pin: CTS,
-// }
-
-// TODO
-// pub struct UartTransmitter<UART, TX, RTS> {
-//     _uart: UART,
-//     _tx_pin: TX,
-//     _rts_pin: RTS,
-// }
-
 /// Pins that can be used for receiving data on a UART peripheral.
 pub trait RxPin<UART>: crate::Sealed {}
 /// Pins that can be used for transmitting data on a UART peripheral.
 pub trait TxPin<UART>: crate::Sealed {}
-
-// TODO: Implement CTS and RTS pins for hardware flow control
-// pub trait CtsPin<UART>: crate::Sealed {}
-// pub trait RtsPin<UART>: crate::Sealed {}
 
 // All UART peripherals are derived from the same register block
 type UartRegisterBlock = crate::pac::uart0::RegisterBlock;
@@ -340,32 +322,6 @@ where
         self.parity = parity;
         self
     }
-
-    // TODO: Implement hardware flow control
-    // pub fn enable_hfc(
-    //     self,
-    //     cts_pin: $cts_pin,
-    //     rts_pin: $rts_pin
-    // ) -> UartPeripheral<NotBuilt, CLOCK, $uart, RX, TX, $cts_pin, $rts_pin> {
-    //     // Enable CTS and RTS pins
-    //     // cts_pin.enable();
-    //     // rts_pin.enable();
-    //     UartPeripheral {
-    //         _state: PhantomData,
-    //         _clock: PhantomData,
-    //         uart: self.uart,
-    //         _rx_pin: self._rx_pin,
-    //         _tx_pin: self._tx_pin,
-    //         _cts_pin: cts_pin,
-    //         _rts_pin: rts_pin,
-    //         clk_src: self.clk_src,
-    //         clk_src_freq: self.clk_src_freq,
-    //         baud: self.baud,
-    //         data_bits: self.data_bits,
-    //         stop_bits: self.stop_bits,
-    //         parity: self.parity,
-    //     }
-    // }
 }
 
 impl<UART, RX, TX, CTS, RTS>

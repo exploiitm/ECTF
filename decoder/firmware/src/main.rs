@@ -1,161 +1,262 @@
 #![no_std]
 #![no_main]
-pub extern crate max7800x_hal as hal;
-use alloc::vec;
-use embedded_io::Write;
-pub use hal::entry;
-pub use hal::pac;
-// this comment is useless, added by nithin.
-
-// use core::cell::RefCell;
-
-// use cortex_m::interrupt::{self, Mutex};
-
-use board::Board;
 
 extern crate alloc;
-use alloc::format;
+use crate::alloc::collections::BTreeMap;
+
+use board::MAX_SUBSCRIPTION_BYTES;
+use ed25519_dalek::Signature;
+use ed25519_dalek::{Verifier, VerifyingKey};
 use embedded_alloc::LlffHeap as Heap;
-use hashbrown::HashMap;
+use hmac::{Hmac, Mac};
 use sha3::{Digest, Sha3_256};
+type HmacSha = Hmac<Sha3_256>;
+
+use board::decrypt_data;
+use board::host_messaging;
+use board::parse_packet::parse_packet;
+use board::Board;
+use board::ChannelFlashMap;
+use hal::entry;
+use hal::flc::FlashError;
+use max7800x_hal as hal;
+
+// Include secrets
+include!(concat!(env!("OUT_DIR"), "/secrets.rs"));
+
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
 
-// 16KB heap (adjust based on your needs)
+// 16KB heap
 const HEAP_SIZE: usize = 1024 * 16;
 static mut HEAP_MEM: [core::mem::MaybeUninit<u8>; HEAP_SIZE] =
     [core::mem::MaybeUninit::uninit(); HEAP_SIZE];
 
-// fn derive_key(
-//     timestamp: u64, // Now 64-bit
-//     cover: &HashMap<u128, [u8; 32]>,
-//     left_salt: &[u8; 32],
-//     right_salt: &[u8; 32],
-// ) -> [u8; 32] {
-//     // If the full timestamp is in cover, return its key directly
-//     let mut iterator: u128 = u128::from(timestamp) + (1u128 << 64 - 1);
-//
-//     if let Some(key) = cover.get(&iterator) {
-//         return *key;
-//     }
-//
-//     // Work backwards until we find a prefix in the cover
-//     let mut salts_to_apply = 1u128;
-//
-//     while iterator > 0 {
-//         salts_to_apply <<= 1;
-//         salts_to_apply |= iterator & 1;
-//         iterator >>= 1;
-//
-//         if let Some(cover_key) = cover.get(&iterator) {
-//             // Found a cover key, now derive forward
-//             let mut current_key = *cover_key;
-//
-//             while salts_to_apply != 1 {
-//                 let mut hasher = Sha256::new();
-//                 hasher.update(&current_key);
-//                 if salts_to_apply & 1 == 1 {
-//                     // Apply right salt
-//                     hasher.update(right_salt);
-//                     current_key = hasher.finalize().into();
-//                 } else {
-//                     hasher.update(left_salt);
-//                     current_key = hasher.finalize().into();
-//                 }
-//             }
-//
-//             return current_key;
-//         }
-//     }
-//
-//     panic!("No valid cover key found for timestamp");
-// }
-
-fn test_key_derivation(board: &mut Board) {
-    // Set up example cover and salts with fixed 32-byte arrays
-    board.console.write_bytes(b"breakpoint 1\r\n");
-    let mut cover = HashMap::new();
-
-    board.console.write_bytes(b"breakpoint 2\r\n");
-    // Example cover keys (32 bytes each)
-    cover.insert("nigger", [0u8; 32]).unwrap(); // Cover for timestamps starting with 0
-                                                // cover.insert(foo, [2u8; 32]); // Cover for timestamps starting with 10
-                                                // cover.insert(110, [3u8; 32]); // Cover for timestamps starting with 110
-
-    // let left_salt = [4u8; 32]; // 32-byte left salt
-    // let right_salt = [5u8; 32]; // 32-byte right salt
-
-    board.console.write_bytes(b"breakpoint 3\r\n");
-    // Test some full 64-bit timestamps
-    // let test_timestamps = vec![
-    //     0x0000000000000001, // Timestamp starting with 0
-    //     0x4000000000000000, // Timestamp starting with 01
-    //     0x0000000000000001, // Timestamp starting with 0
-    //     0x8000000000000000, // Timestamp starting with 1
-    //     0xC000000000000000, // Timestamp starting with 11
-    //     0xD000000000000000, // Invalid timestamp
-    // ];
-
-    // for ts in test_timestamps {
-    //     let _key = derive_key(ts, &cover, &left_salt, &right_salt);
-    // }
-    board.console.write_bytes(b"breakpoint 4\r\n");
-}
-
 #[entry]
 fn main() -> ! {
-    //initialize the board
-
+    // initializing heap
     unsafe {
         HEAP.init(
             core::ptr::addr_of_mut!(HEAP_MEM).cast::<u8>() as usize,
             HEAP_SIZE,
         );
     }
-    let mut board = Board::new();
-    board.delay.delay_ms(500);
-    board.console.write_bytes(b"Board Initialized\r\n");
 
-    let var = 0x69;
-    let string = alloc::format!("Value of var is: {}\r\n", var);
-    board.console.write_bytes(string.as_bytes());
-    // panic!();
-    let is_bit_set = board.is_safety_bit_set();
-    board.delay.delay_ms(500);
-    if is_bit_set {
-        board.console.write_bytes(b"No Lockdown Was Triggerred\r\n");
-        board.console.flush().unwrap();
-    } else {
+    // initializing board
+    let mut board = Board::new();
+
+    board.random_delay(250, 350);
+
+    // is lockdown bit set?
+    let lockdown_bit = board.is_safety_bit_set();
+    board.delay.delay_ms(50);
+
+    if !lockdown_bit {
         board.lockdown();
     }
-    board.delay.delay_ms(1000);
-    // panic!();
-    let mut cover = HashMap::new();
-    write!(board.console, "Made Hash Map\r\n").unwrap();
-    cover.insert("nigger", [1u8; 32]);
-    write!(board.console, "updated Hash Map\r\n").unwrap();
+    board.delay.delay_ms(50);
 
-    write!(board.console, "hash creation\r\n").unwrap();
-    let mut hasher = Sha3_256::new();
-    write!(board.console, "hash creation success\r\n").unwrap();
-    hasher.update(b"nigger");
-    write!(board.console, "hash update success\r\n").unwrap();
-    let result = hasher.finalize();
-    write!(board.console, "hash finalize success\r\n").unwrap();
+    let mut channel_map = board.read_channel_map().unwrap_or(ChannelFlashMap {
+        map: BTreeMap::new(),
+    });
+
+    board.random_delay(500, 300);
+
+    // Retrieve all the subscriptions from flash and decrypt them
+    for (&_channel_id, &page_addr) in channel_map.map.iter() {
+        let mut data = [0u8; MAX_SUBSCRIPTION_BYTES];
+
+        // Read each sub from flash
+        if let Ok(length) = board.read_sub_from_flash(page_addr, &mut data) {
+            let key = get_key("Ks").expect("Fetching Ks in main for channel from flash failed");
+
+            // Decrypt the subscription and subscribe again to the file
+            decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU)
+                .map(|subscription| {
+                    board.random_delay(150, 100);
+
+                    board.subscriptions.add_subscription(subscription);
+                })
+                .expect("couldn't decrypt stored subscription");
+        }
+    }
+
+    let mut most_recent_timestamp = None;
 
     loop {
-        let header: board::host_messaging::Header = board::host_messaging::read_header(&mut board);
+        let header = board::host_messaging::read_header(&mut board);
+
         match header.opcode {
             board::host_messaging::Opcode::List => {
                 board::host_messaging::list_subscriptions(&mut board);
             }
+
+            board::host_messaging::Opcode::Subscribe => {
+                match subscribe(&header, &mut board, &mut channel_map) {
+                    Ok(_) => {}
+                    Err(_) => continue,
+                }
+            }
+
             board::host_messaging::Opcode::Decode => {
-                board::host_messaging::decode(&mut board, header);
+                match decode(&header, &mut board, &mut most_recent_timestamp) {
+                    Ok(_) => {}
+                    Err(_) => continue,
+                }
             }
             _ => {
-                panic!()
+                panic!("Unknown opcode")
             }
         }
     }
-    // panic!();
+}
+
+fn subscribe(
+    header: &host_messaging::Header,
+    board: &mut Board,
+    channel_map: &mut ChannelFlashMap,
+) -> Result<(), FlashError> {
+    let mut data = [0u8; MAX_SUBSCRIPTION_BYTES];
+    let length = header.length;
+    board::host_messaging::subscription_update(board, header, &mut data[0..length as usize]);
+
+    let key = get_key("Ks").expect("Ks fetch for subscribe failed");
+
+    // Attempt decryption of the subscription
+    decrypt_data::decrypt_sub(&mut data[0..length as usize], *key, DECODER_ID, &KPU)
+        .map(|subscription| {
+            let channel_id = subscription.channel;
+            let is_new = board.subscriptions.add_subscription(subscription);
+
+            let address = if is_new {
+                // Find a new available page for the subscription update
+                let new_address = board
+                    .find_available_page(&channel_map)
+                    .expect("find available page didnt work");
+
+                new_address
+            } else {
+                let &old_address = channel_map
+                    .map
+                    .get(&channel_id)
+                    .expect("Weird; check says it should exist.");
+
+                old_address
+            };
+
+            board
+                .write_sub_to_flash(address, &mut data[0..length as usize])
+                .expect("Failed to write to flash");
+
+            // Rewriting the subscription flash map dictionary
+            board
+                .assign_page_for_subscription(channel_map, channel_id, address)
+                .expect("page assignment failed");
+
+            host_messaging::succesful_subscription(board);
+        })
+        .expect("Whole of decrypt sub itself failed");
+
+    board.random_delay(10, 10);
+
+    Ok(())
+}
+
+fn decode(
+    header: &host_messaging::Header,
+    board: &mut Board,
+    most_recent_timestamp: &mut Option<u64>,
+) -> Result<(), FlashError> {
+    let length = header.length;
+    if length != 189 {
+        panic!("length mismatch in decode");
+    }
+
+    let mut frame_data = [0u8; 189];
+    board::host_messaging::read_frame_packet(board, header, &mut frame_data);
+
+    let packet = parse_packet(&frame_data);
+
+    let mut sub_index = None;
+    board.random_delay(5, 5);
+    if let Some(rec) = most_recent_timestamp {
+        if packet.timestamp <= *rec {
+            host_messaging::send_error_message(board, "Timestamp reversion.");
+            return Err(FlashError::InvalidAddress);
+        }
+    }
+    *most_recent_timestamp = Some(packet.timestamp);
+
+    let key: [u8; 32] = if packet.channel_id == 0 {
+        *get_key("K0").expect("Fetching K0 failed")
+    } else {
+        for index in 0..board.subscriptions.size {
+            if board.subscriptions.subscriptions[index as usize]
+                .as_ref()
+                .expect("internal error, check subscriptions array")
+                .channel
+                == packet.channel_id
+            {
+                sub_index = Some(index);
+                break;
+            }
+        }
+
+        if sub_index.is_none() {
+            host_messaging::send_error_message(board, "No subscription found.");
+            return Err(FlashError::InvalidAddress);
+        }
+
+        let sub = &board.subscriptions.subscriptions
+            [sub_index.expect("should ideally be impossible but yeah") as usize];
+
+        let sub = sub.as_ref();
+
+        let sub = sub.expect("again, should be impossible");
+
+        if packet.timestamp < sub.start || packet.timestamp > sub.end {
+            host_messaging::send_error_message(board, "Timestamp out of bounds.");
+            return Err(FlashError::InvalidAddress);
+        }
+
+        let key = &sub.kdf.derive(packet.timestamp);
+
+        board.random_delay(5, 5);
+
+        let mut hasher = Sha3_256::new();
+        hasher.update(&key.unwrap());
+        hasher.finalize().as_slice().try_into().unwrap()
+    };
+    let mut hmac = HmacSha::new_from_slice(&key).expect("can't create HMAC from key");
+    hmac.update(&frame_data[..93]);
+    let result = hmac.finalize().into_bytes();
+
+    let mut comparison = 0;
+    for byte_tuple in result.iter().zip(&frame_data[93..125]) {
+        comparison |= byte_tuple.0 ^ byte_tuple.1;
+    }
+
+    if comparison != 0 {
+        panic!("hmacs failure in decode");
+    }
+
+    let verification_key =
+        VerifyingKey::from_bytes(&KPU).expect("KPU is not a valid verifying key");
+    let signature_received = packet.signature;
+    let result = verification_key
+        .verify(
+            &frame_data[..125],
+            &Signature::try_from(signature_received).unwrap(),
+        )
+        .is_ok();
+
+    if result == false {
+        panic!("signature verification failed");
+    }
+
+    let mut result: [u8; 64] = [0u8; 64];
+    decrypt_data::decrypt_data(&packet.data_enc, &key, &packet.iv, &mut result);
+    let result = &result[0..packet.length as usize];
+    host_messaging::write_decoded_packet(board, result);
+    Ok(())
 }

@@ -1,45 +1,64 @@
-# Dumbass PLSSS read 
-## Decoder
-All decoder code is inside 'decoder' folder
+# ECTF '25 - IIT Madras
+
+## Overview
+
+This repository contains our team's implementation for the eCTF '25 TV Decoder System challenge. Our solution focuses on a secure and efficient decoder for satellite TV frame data, implemented on the MAX78000FTHR board. We've developed a novel encryption scheme, detailed in our design document, to meet the challenge requirements while prioritizing security and performance.
 
 
-```
-.
-├── decoder
-│   ├── Cargo.lock
-│   ├── Cargo.toml
-│   ├── firmware
-│   │   ├── build.rs
-│   │   ├── Cargo.lock
-│   │   ├── Cargo.toml
-│   │   ├── examples
-│   │   ├── memory.x
-│   │   └── src
-│   ├── lib
-│   │   ├── board
-│   │   └── max78000fthr_hal
-│   └── Makefile
+## Usage
+
+### Environment Setup
+
+To setup your environment, run
+
+```zsh
+pip install ./design
 ```
 
-## Build
-To build decoder bin use:
-`make`
-The binary is in build folder inside decoder
+### Generate Secrets
 
-It's gitignored
+To generate secrets, run
 
-## Target
-
-It's gitignored
-
-## flashing
-
-For dependencies
-
-`python -m pip install pyserial`
-
-```
-└── tools
-    └── remote.py
+```zsh
+python -m ectf25_design.gen_secrets global.secrets <channel_id_1> <channel_id_2> ...
 ```
 
+>[!Warning]
+>Please ensure this is run in the parent directory, to ensure `global.secrets` is generated in the parent directory.
+
+This step is essential to build the decoder firmware. 
+
+### Generate Subscriptions
+
+To generate a subscription for a specific channel and timestamp range, use the following workflow
+
+```zsh
+python -m ectf25_design.gen_subscription global.secrets <path/to/subscription/binary> <DECODER_ID> <start_timestamp> <end_timestamp> <channel_id>
+```
+### Build Decoder
+
+To build the decoder firmware, use the following workflow
+
+```zsh
+cd ./decoder
+make DECODER_ID=<DECODERID_in_decimal_or_hex>
+```
+
+> [!Note]
+> The output binary will be located at `./decoder/build/max78000.bin`
+
+
+## Us, your frenemies ;)
+
+- Arivoli Ramamoorthy
+- Abhinav I S
+- Sanjeev Subrahmaniyan
+- Madhav Tadepalli
+- Nithin Ken Maran
+- Kevin Kinsey
+- Athish Pranav Dharmalingam
+- Md. Isfarul Haque
+- Mohitabinav M.
+- Nitin G
+
+![Team Photo](./team_photo.jpg)
