@@ -563,17 +563,17 @@ fn panic_handler(info: &PanicInfo) -> ! {
     console.flush_tx();
 
     // Erasing the lookup table and the stored subscriptions
-    unsafe {
-        flc.erase_page(LOOKUP_TABLE_LOCATION).unwrap();
-    }
-    let start_addr = CHANNEL_PAGE_START;
-    for i in 1..10 {
-        let current_addr = start_addr + (i * PAGE_SIZE);
-
-        unsafe {
-            flc.erase_page(current_addr).unwrap();
-        }
-    }
+    // unsafe {
+    //     flc.erase_page(LOOKUP_TABLE_LOCATION).unwrap();
+    // }
+    // let start_addr = CHANNEL_PAGE_START;
+    // for i in 1..10 {
+    //     let current_addr = start_addr + (i * PAGE_SIZE);
+    //
+    //     unsafe {
+    //         flc.erase_page(current_addr).unwrap();
+    //     }
+    // }
 
     // Resetting the safety bit
     let addr = SAFETY_LOCATION;
